@@ -1,0 +1,3500 @@
+{
+  "schema_version": 1,
+  "project": "magda-agent",
+  "task_source_priority": [
+    "agent_tasks.json",
+    "AGENTS.md",
+    "docs/codex_worker_plan.md",
+    "backlog.md"
+  ],
+  "risk_levels": [
+    "low",
+    "medium",
+    "high",
+    "critical"
+  ],
+  "merge_policy": {
+    "low": "auto_merge_after_tests",
+    "medium": "auto_merge_after_tests_and_critic",
+    "high": "human_review_required",
+    "critical": "manual_only"
+  },
+  "replenishment_policy": {
+    "minimum_todo_tasks": 3,
+    "batch_size": 3,
+    "always_add_tasks": false,
+    "tasks_per_run": 1,
+    "allowed_risks_for_generated_tasks": [
+      "low",
+      "medium"
+    ],
+    "instruction": "Add new todo tasks ONLY when the pool falls below minimum_todo_tasks. Before adding, scan existing done and blocked tasks — never recreate implemented features. Prefer stabilization, wiring, and test coverage over new trend modules. Read docs/trends.md for inspiration when replenishment is needed.",
+    "max_todo_tasks": 53
+  },
+  "autonomous_loop_policy": {
+    "operating_model": "docs/jules_autonomous_loop.md",
+    "selection_rule": "Choose the first todo task that is not blocked by high/critical risk. If the first todo task is too large, create smaller prerequisite tasks and select the first prerequisite.",
+    "anti_stall_rule": "Never ask the user for the next task while safe low/medium-risk tasks can be generated from architecture docs, failing CI, TODO comments, or repeated errors.",
+    "stabilization_first": true,
+    "max_pr_scope": "one task id per PR",
+    "failure_rule": "If CI fails, prioritize a fix task for the failure before starting new features."
+  },
+  "tasks": [
+    {
+      "id": "architecture-contracts",
+      "status": "done",
+      "area": "architecture",
+      "risk": "low",
+      "title": "Document target cognitive architecture",
+      "description": "Create a project-level architecture document that maps biological concepts to engineering contracts and defines the Jules self-improvement governance model.",
+      "allowed_paths": [
+        "docs/**",
+        "agent_tasks.json",
+        "scripts/**",
+        "tests/**"
+      ],
+      "acceptance": [
+        "docs/cognitive_architecture.md exists",
+        "agent_tasks.json validates with scripts/validate_agent_tasks.py"
+      ]
+    },
+    {
+      "id": "task-schema-validator",
+      "status": "done",
+      "area": "governance",
+      "risk": "low",
+      "title": "Validate agent task manifest",
+      "description": "Add a stdlib-only validator for agent_tasks.json and tests that prevent malformed tasks, unknown risk levels, missing acceptance criteria and invalid path scopes.",
+      "allowed_paths": [
+        "agent_tasks.json",
+        "scripts/validate_agent_tasks.py",
+        "tests/test_agent_tasks.py"
+      ],
+      "acceptance": [
+        "python scripts/validate_agent_tasks.py agent_tasks.json",
+        "pytest tests/test_agent_tasks.py"
+      ]
+    },
+    {
+      "id": "jules-autonomous-loop-doc",
+      "status": "done",
+      "area": "governance",
+      "risk": "low",
+      "title": "Document Jules autonomous operating loop",
+      "description": "Define how Jules selects tasks, replenishes the queue, handles failures, avoids clarification stalls and keeps PRs small.",
+      "allowed_paths": [
+        "docs/**",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "docs/jules_autonomous_loop.md exists",
+        "agent_tasks.json includes autonomous_loop_policy",
+        "task queue defines concrete stabilization work before larger cognitive modules"
+      ]
+    },
+    {
+      "id": "codex-worker-plan-and-bridge",
+      "status": "done",
+      "area": "codex",
+      "risk": "low",
+      "title": "Add Codex worker plan and bridge CLI",
+      "description": "Document how Magda should work through Codex and add a stdlib-only CLI that lets Codex validate the task manifest, inspect queue status, fetch the next task and render focused prompts.",
+      "allowed_paths": [
+        "AGENTS.md",
+        "magda_agent/codex_bridge.py",
+        "docs/codex_worker_plan.md",
+        "docs/**",
+        "agent_tasks.json",
+        "README.md"
+      ],
+      "acceptance": [
+        "AGENTS.md describes Codex/Jules repo instructions",
+        "docs/codex_worker_plan.md exists",
+        "python -m magda_agent.codex_bridge validate works",
+        "python -m magda_agent.codex_bridge next-task prints the next todo task",
+        "python -m magda_agent.codex_bridge render-prompt renders a scoped task prompt"
+      ]
+    },
+    {
+      "id": "codex-bridge-tests",
+      "status": "done",
+      "area": "codex",
+      "risk": "low",
+      "title": "Add focused tests for Codex bridge CLI",
+      "description": "Cover the stdlib-only Codex bridge commands so task selection, prompt rendering and queue status remain stable.",
+      "allowed_paths": [
+        "magda_agent/codex_bridge.py",
+        "tests/test_codex_bridge.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "status reports total todo count and replenishment flag",
+        "next-task returns the first todo task",
+        "render-prompt includes task id, allowed paths and acceptance criteria",
+        "validate command delegates to scripts/validate_agent_tasks.py"
+      ]
+    },
+    {
+      "id": "codex-worker-skill-prompt-only",
+      "status": "done",
+      "area": "codex",
+      "risk": "medium",
+      "title": "Add Codex worker skill in prompt-only mode",
+      "description": "Expose a safe skill that renders a Codex-ready task prompt without launching external Codex processes or creating PRs.",
+      "allowed_paths": [
+        "magda_agent/skills/codex_worker.py",
+        "magda_agent/skills/__init__.py",
+        "magda_agent/skills/registry.py",
+        "tests/test_codex_worker.py",
+        "docs/codex_worker_plan.md",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "codex_worker skill accepts optional task_id",
+        "skill returns a prompt generated from agent_tasks.json",
+        "skill does not execute shell commands or network calls",
+        "skill metadata marks it as low side-effect prompt-only capability"
+      ]
+    },
+    {
+      "id": "codex-pr-review-renderer",
+      "status": "done",
+      "area": "codex",
+      "risk": "medium",
+      "title": "Add Codex PR review prompt renderer",
+      "description": "Create a renderer that turns a PR diff summary into a Codex/CriticAgent review prompt focused on regressions, risks and missing tests.",
+      "allowed_paths": [
+        "magda_agent/codex_bridge.py",
+        "magda_agent/metacognition/**",
+        "tests/test_codex_bridge.py",
+        "docs/codex_worker_plan.md",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "renderer accepts PR title, changed files and diff summary",
+        "prompt asks for findings first, ordered by severity",
+        "prompt includes risk and missing-test sections",
+        "renderer is deterministic and does not call external APIs"
+      ]
+    },
+    {
+      "id": "task-claim-locking",
+      "status": "done",
+      "area": "governance",
+      "risk": "medium",
+      "title": "Add task claim and lock fields for multiple workers",
+      "description": "Extend agent_tasks.json schema so Jules, Codex and future workers do not accidentally take the same task at the same time.",
+      "allowed_paths": [
+        "agent_tasks.json",
+        "scripts/validate_agent_tasks.py",
+        "tests/test_agent_tasks.py",
+        "magda_agent/codex_bridge.py",
+        "docs/jules_autonomous_loop.md",
+        "docs/codex_worker_plan.md"
+      ],
+      "acceptance": [
+        "tasks may include claimed_by and claimed_at fields",
+        "validator rejects stale or malformed claim metadata when present",
+        "codex_bridge status shows claimed tasks",
+        "task selection can skip active claims unless explicitly overridden"
+      ]
+    },
+    {
+      "id": "cross-platform-skill-imports",
+      "status": "done",
+      "area": "stabilization",
+      "risk": "low",
+      "title": "Make skill imports cross-platform",
+      "description": "Prevent Linux-only sandbox dependencies from breaking import of magda_agent.skills on Windows or other non-Linux developer environments.",
+      "allowed_paths": [
+        "magda_agent/skills/system_execute_code.py",
+        "magda_agent/skills/__init__.py",
+        "tests/test_security_sandbox.py",
+        "tests/test_internet_search.py",
+        "tests/test_omnichannel.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "import magda_agent.skills does not fail when resource is unavailable",
+        "Linux sandbox behavior remains unchanged where resource/preexec_fn are available",
+        "non-Linux fallback returns a clear unsupported or restricted execution result instead of import-time crash"
+      ]
+    },
+    {
+      "id": "bounded-emotional-history",
+      "status": "done",
+      "area": "stabilization",
+      "risk": "low",
+      "title": "Bound EmotionalEngine history",
+      "description": "Replace unbounded emotion history growth with a bounded structure so the 24/7 agent does not leak memory through PAD history.",
+      "allowed_paths": [
+        "magda_agent/emotions/engine.py",
+        "tests/test_attachment.py",
+        "tests/test_insula.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "EmotionalEngine history has a configurable maximum length",
+        "existing PAD update and decay behavior remains compatible",
+        "long-running updates do not grow history without bound"
+      ]
+    },
+    {
+      "id": "planner-execution-limits",
+      "status": "done",
+      "area": "stabilization",
+      "risk": "medium",
+      "title": "Add max steps and timeouts to plan execution",
+      "description": "Prevent Consciousness.process_input from blocking indefinitely on long LLM-generated plans or slow skills.",
+      "allowed_paths": [
+        "magda_agent/consciousness/core.py",
+        "magda_agent/planning/planner.py",
+        "tests/test_planner.py",
+        "tests/test_api.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "plan execution has a maximum step count",
+        "each skill execution has a timeout or explicit bounded execution path",
+        "user receives a graceful partial-result response when a plan is stopped by limits",
+        "existing simple chat flow remains compatible"
+      ]
+    },
+    {
+      "id": "planner-schema-validation",
+      "status": "done",
+      "area": "safety",
+      "risk": "medium",
+      "title": "Validate LLM-generated plans before execution",
+      "description": "Add structured validation for planner output so unknown skills, malformed skill_kwargs and unsafe plans are rejected before execution.",
+      "allowed_paths": [
+        "magda_agent/planning/planner.py",
+        "magda_agent/skills/registry.py",
+        "tests/test_planner.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "planner rejects non-list JSON",
+        "planner rejects steps without description/skill/skill_kwargs shape",
+        "planner rejects unknown skill names before execution",
+        "planner keeps safe no-skill chat steps valid"
+      ]
+    },
+    {
+      "id": "per-user-agent-state",
+      "status": "done",
+      "area": "stabilization",
+      "risk": "medium",
+      "title": "Separate mutable agent state by user",
+      "description": "Prevent emotional state, short-term memory and attachment dynamics from leaking between users in the FastAPI singleton service.",
+      "allowed_paths": [
+        "magda_agent/api.py",
+        "magda_agent/consciousness/core.py",
+        "magda_agent/emotions/**",
+        "magda_agent/memory/**",
+        "tests/test_memory_user_context.py",
+        "tests/test_attachment.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "different user_id values do not share emotional PAD state unintentionally",
+        "short-term memory retrieval remains user-aware",
+        "attachment state has a persistence or explicit reset strategy",
+        "anonymous users still work with a default isolated context"
+      ]
+    },
+    {
+      "id": "subconscious-graceful-stop",
+      "status": "done",
+      "area": "stabilization",
+      "risk": "low",
+      "title": "Make Subconsciousness stop promptly",
+      "description": "Replace long sleep-only shutdown behavior with an asyncio.Event or equivalent so background reflection can stop promptly during service shutdown.",
+      "allowed_paths": [
+        "magda_agent/subconsciousness/reflection.py",
+        "tests/test_subconsciousness.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "stop wakes the background loop without waiting for the full interval",
+        "start/stop remains idempotent enough for tests",
+        "existing reflection behavior remains compatible"
+      ]
+    },
+    {
+      "id": "risk-system",
+      "status": "done",
+      "area": "safety",
+      "risk": "medium",
+      "title": "Implement Amygdala/RiskSystem for change classification",
+      "description": "Create a risk classifier that scores file changes and action requests before tool execution or auto-merge decisions.",
+      "allowed_paths": [
+        "magda_agent/safety/**",
+        "tests/test_risk_system.py",
+        "docs/**",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "changes to workflows are high risk",
+        "changes to requirements are high risk",
+        "docs-only changes are low risk",
+        "sandbox and skill registry changes are high risk"
+      ]
+    },
+    {
+      "id": "salience-network",
+      "status": "done",
+      "area": "cognition",
+      "risk": "medium",
+      "title": "Implement Salience Network",
+      "description": "Add a module that scores events by urgency, active task relevance, CI/test signal, uncertainty, novelty and risk.",
+      "allowed_paths": [
+        "magda_agent/attention/**",
+        "magda_agent/consciousness/**",
+        "tests/test_salience.py",
+        "docs/**",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "noisy low-value input receives low salience",
+        "failed CI event receives high salience",
+        "security-risk event receives high salience",
+        "Consciousness can use salience without changing public API"
+      ]
+    },
+    {
+      "id": "global-workspace",
+      "status": "done",
+      "area": "cognition",
+      "risk": "medium",
+      "title": "Introduce Global Workspace",
+      "description": "Refactor the central cognitive loop so multiple candidate events compete for focus before memory retrieval, planning and action selection.",
+      "allowed_paths": [
+        "magda_agent/consciousness/**",
+        "magda_agent/attention/**",
+        "tests/test_global_workspace.py",
+        "tests/test_api.py",
+        "docs/**",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "workspace selects highest-salience candidate",
+        "suppressed candidates remain inspectable",
+        "existing /process API behavior remains compatible",
+        "planner still receives the focused user input"
+      ]
+    },
+    {
+      "id": "procedural-memory",
+      "status": "done",
+      "area": "memory",
+      "risk": "medium",
+      "title": "Implement Procedural Memory",
+      "description": "Implement a Procedural Memory module to store reusable successful procedures.",
+      "allowed_paths": [
+        "magda_agent/memory/**",
+        "tests/test_memory*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Procedural memory stores reusable successful methods",
+        "Existing user_id filtering remains supported"
+      ]
+    },
+    {
+      "id": "memory-layer-split",
+      "status": "done",
+      "area": "memory",
+      "risk": "medium",
+      "title": "Split memory into working, episodic, semantic and procedural layers",
+      "description": "Reduce confusion between MemorySystem.long_term, LongTermMemory and habit storage by introducing explicit memory layer contracts.",
+      "allowed_paths": [
+        "magda_agent/memory/**",
+        "magda_agent/learning/**",
+        "tests/test_memory*.py",
+        "tests/test_learning/**",
+        "docs/**",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "working memory is bounded and non-persistent",
+        "episodic memory stores events",
+        "semantic memory stores stable project/user facts",
+        "procedural memory stores reusable successful methods",
+        "existing user_id filtering remains supported"
+      ]
+    },
+    {
+      "id": "subconscious-consolidation",
+      "status": "done",
+      "area": "reflection",
+      "risk": "medium",
+      "title": "Upgrade Subconsciousness into structured consolidation",
+      "description": "Make the background loop produce structured summaries, lessons, anti-patterns and proposed tasks instead of only generic reflection.",
+      "allowed_paths": [
+        "magda_agent/subconsciousness/**",
+        "magda_agent/memory/**",
+        "tests/test_subconsciousness.py",
+        "docs/**",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "reflection output is validated JSON",
+        "lessons are stored separately from raw conversation",
+        "recurring failures can create proposed tasks",
+        "LLM calls remain mocked in tests"
+      ]
+    },
+    {
+      "id": "quality-metrics-tracking",
+      "status": "done",
+      "area": "reflection",
+      "risk": "medium",
+      "title": "Add longitudinal quality metrics for Jules loop",
+      "description": "Implement a tracker to measure continuous improvement metrics like test pass rate and PR size, storing them for reflection.",
+      "allowed_paths": [
+        "magda_agent/metacognition/**",
+        "tests/test_metrics.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Tracker module logs pass rates and PR stats",
+        "Metrics are stored in a persistent store",
+        "Subconsciousness can read metrics"
+      ]
+    },
+    {
+      "id": "planner-typed-plans",
+      "status": "done",
+      "area": "cognition",
+      "risk": "medium",
+      "title": "Upgrade Prefrontal Cortex to output typed plans",
+      "description": "The current planner returns loose JSON steps. Upgrade it to output typed plans with explicit risk and acceptance criteria as defined in cognitive_architecture.md.",
+      "allowed_paths": [
+        "magda_agent/planning/planner.py",
+        "tests/test_planner.py",
+        "docs/**",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Planner outputs structured plans with goal, constraints, risk, steps, and acceptance",
+        "Tests verify the exact structure matches the new Pydantic schema",
+        "LLM calls remain mocked in tests"
+      ]
+    },
+    {
+      "id": "working-memory-summarization",
+      "status": "done",
+      "area": "memory",
+      "risk": "medium",
+      "title": "Add context summarization to Working Memory limit",
+      "description": "Instead of dropping old short-term memory items abruptly when bounded limits are hit, introduce an LLM summarization step to compress context before eviction.",
+      "allowed_paths": [
+        "magda_agent/memory/working.py",
+        "tests/test_memory_working.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "WorkingMemory calls a summarization function before evicting items",
+        "Summarized context replaces dropped items as a synthetic MemoryEntry",
+        "Tests verify that bounded limit works but information is preserved via summary"
+      ]
+    },
+    {
+      "id": "task-recovery-lesson",
+      "status": "done",
+      "area": "reflection",
+      "risk": "medium",
+      "title": "Introduce Task Recovery Lessons",
+      "description": "Create a mechanism for Jules/Codex to convert PR failures into reusable 'lessons' in Procedural Memory, minimizing repeated identical mistakes.",
+      "allowed_paths": [
+        "magda_agent/learning/**",
+        "tests/test_learning/**",
+        "docs/**",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Failed operations can trigger a 'lesson generation' step",
+        "Lesson is stored in Procedural Memory",
+        "Lesson is retrieved when attempting a similar task"
+      ]
+    },
+    {
+      "id": "mcp-tool-export",
+      "status": "done",
+      "area": "integration",
+      "risk": "medium",
+      "title": "Export Magda skills as MCP-compatible tools",
+      "description": "Implement an MCP server adapter that exposes Magda's skill registry as MCP tools. External agents can call Magda skills via JSON-RPC. Follow the MCP specification (JSON-RPC, typed schemas).",
+      "allowed_paths": [
+        "magda_agent/mcp/**",
+        "magda_agent/skills/**",
+        "tests/test_mcp*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "MCP server starts and lists tools",
+        "External client can invoke a skill via MCP protocol",
+        "Tests mock the transport layer"
+      ]
+    },
+    {
+      "id": "a2a-agent-card",
+      "status": "done",
+      "area": "integration",
+      "risk": "medium",
+      "title": "Implement A2A Agent Card for discovery",
+      "description": "Create an Agent Card (per A2A protocol spec) that describes Magda's capabilities, supported modalities, and endpoints. Other agents can discover Magda and delegate tasks to her.",
+      "allowed_paths": [
+        "magda_agent/a2a/**",
+        "tests/test_a2a*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent Card JSON generated from skill registry",
+        "Card includes capabilities, modalities, and endpoint",
+        "Tests validate card schema"
+      ]
+    },
+    {
+      "id": "context-engine-plugin",
+      "status": "done",
+      "area": "memory",
+      "risk": "medium",
+      "title": "Context Engine with plugin lifecycle hooks",
+      "description": "Implement a ContextEngine plugin interface inspired by OpenClaw's architecture: bootstrap, ingest, assemble, compact lifecycle. Allows swapping context strategies without changing core.",
+      "allowed_paths": [
+        "magda_agent/context/**",
+        "tests/test_context*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Plugin interface with 4 lifecycle hooks",
+        "Default plugin implements current behavior",
+        "Tests verify hook ordering and fallback"
+      ]
+    },
+    {
+      "id": "sub-agent-spawning",
+      "status": "done",
+      "area": "planning",
+      "risk": "medium",
+      "title": "Sub-agent spawning for parallel tasks",
+      "description": "Planner can spawn isolated sub-agents (separate context, separate task). Sub-agents report results back. Inspired by Claude Agent Teams and Hermes sub-agents.",
+      "allowed_paths": [
+        "magda_agent/planning/**",
+        "magda_agent/agents/**",
+        "tests/test_sub_agent*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Planner can decide to spawn sub-agent",
+        "Sub-agent executes in isolated context",
+        "Results merge back into parent context",
+        "Tests mock sub-agent execution"
+      ]
+    },
+    {
+      "id": "skill-creation-from-experience",
+      "status": "done",
+      "area": "learning",
+      "risk": "low",
+      "title": "Auto-create skills from successful interactions",
+      "description": "When Magda successfully completes a multi-step task, extract the procedure as a reusable skill document (inspired by Hermes skill creation). Store in procedural memory.",
+      "allowed_paths": [
+        "magda_agent/learning/**",
+        "magda_agent/memory/procedural.py",
+        "tests/test_skill_creation*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Successful multi-step interactions generate skill candidates",
+        "Skills stored in procedural memory",
+        "Skills retrievable by semantic similarity",
+        "Tests with mock interactions"
+      ]
+    },
+    {
+      "id": "online-learning-from-feedback",
+      "status": "done",
+      "area": "learning",
+      "risk": "medium",
+      "title": "Online learning from user replies (next-state signal)",
+      "description": "Inspired by OpenClaw-RL: treat each user reply as a next-state signal. Positive signals reinforce approach, negative signals trigger reflection and adjustment. No external RL infra needed — use simple reward heuristics.",
+      "allowed_paths": [
+        "magda_agent/learning/**",
+        "magda_agent/metacognition/**",
+        "tests/test_online_learning*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "User reply sentiment extracted as signal",
+        "Positive signals stored as reinforcement",
+        "Negative signals trigger reflection entry",
+        "Tests with mock conversations"
+      ]
+    },
+    {
+      "id": "cron-scheduler",
+      "status": "done",
+      "area": "operations",
+      "risk": "medium",
+      "title": "Built-in cron scheduler for autonomous tasks",
+      "description": "Implement a scheduler that runs tasks without user trigger: daily reflections, memory consolidation, proactive reports. Inspired by Hermes cron scheduler.",
+      "allowed_paths": [
+        "magda_agent/scheduler/**",
+        "tests/test_scheduler*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Scheduler accepts cron-like expressions",
+        "Tasks execute on schedule",
+        "Results delivered to configured channel",
+        "Tests with mocked time"
+      ]
+    },
+    {
+      "id": "policy-layer-tool-calls",
+      "status": "done",
+      "area": "safety",
+      "risk": "medium",
+      "title": "Policy layer for all tool/action execution",
+      "description": "Every action with external effect (file write, API call, message send) passes through a policy layer that can allow/deny/audit. Inspired by Agent Guard and Prempti patterns.",
+      "allowed_paths": [
+        "magda_agent/safety/**",
+        "magda_agent/action/**",
+        "tests/test_policy*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Policy evaluates every tool call before execution",
+        "Deny returns LLM-friendly explanation",
+        "Audit trail logged",
+        "Tests for allow/deny/audit scenarios"
+      ]
+    },
+    {
+      "id": "conversation-continuity",
+      "status": "done",
+      "area": "memory",
+      "risk": "low",
+      "title": "Cross-session conversation continuity",
+      "description": "Remember conversation context across sessions. On new session start, retrieve relevant past context from episodic memory. User never re-explains same thing twice.",
+      "allowed_paths": [
+        "magda_agent/memory/**",
+        "magda_agent/consciousness/**",
+        "tests/test_continuity*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Session start retrieves relevant past episodes",
+        "Context seamlessly continues",
+        "User preferences persist",
+        "Tests with multi-session mock"
+      ]
+    },
+    {
+      "id": "user-model-deepening",
+      "status": "done",
+      "area": "memory",
+      "risk": "low",
+      "title": "Deepening user model across interactions",
+      "description": "Build and maintain a persistent user model: preferences, communication style, expertise level, recurring topics. Model updates incrementally with each interaction. Inspired by Hermes 'deepening model of who you are'.",
+      "allowed_paths": [
+        "magda_agent/memory/**",
+        "magda_agent/user_model/**",
+        "tests/test_user_model*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "User model stored persistently",
+        "Updates after each interaction",
+        "Influences response style",
+        "Tests with mock interaction history"
+      ]
+    },
+    {
+      "id": "multi-channel-gateway",
+      "status": "done",
+      "area": "integration",
+      "risk": "medium",
+      "title": "Multi-channel gateway (Telegram + Discord + API)",
+      "description": "Single gateway process that routes messages from multiple channels (Telegram already exists, add Discord and REST API). Inspired by OpenClaw's 30+ channel support. Start with 3.",
+      "allowed_paths": [
+        "magda_agent/gateway/**",
+        "magda_agent/channels/**",
+        "tests/test_gateway*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Gateway accepts messages from Telegram, Discord, REST API",
+        "Unified internal message format",
+        "Channel-specific adapters",
+        "Tests for routing logic"
+      ]
+    },
+    {
+      "id": "thought-chain-visualization",
+      "status": "done",
+      "area": "metacognition",
+      "risk": "low",
+      "title": "Thought chain visualization for debugging",
+      "description": "Log internal reasoning steps (plan, memory retrieval, risk check, action selection) as a viewable trace. Useful for debugging and understanding agent behavior.",
+      "allowed_paths": [
+        "magda_agent/metacognition/**",
+        "magda_agent/tracing/**",
+        "tests/test_tracing*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Each processing step logged with timestamp and data",
+        "Trace viewable as structured JSON",
+        "No performance impact on production",
+        "Tests verify trace completeness"
+      ]
+    },
+    {
+      "id": "conflict-detection-memory",
+      "status": "done",
+      "area": "memory",
+      "risk": "low",
+      "title": "Detect contradictions between memories",
+      "description": "Subconsciousness should detect when new information contradicts existing semantic memory. Flag conflicts for resolution. Prevents stale knowledge from corrupting decisions.",
+      "allowed_paths": [
+        "magda_agent/subconsciousness/**",
+        "magda_agent/memory/**",
+        "tests/test_conflict*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "New facts checked against existing semantic memory",
+        "Contradictions flagged",
+        "Resolution strategy (newer wins / confidence-based)",
+        "Tests with contradicting facts"
+      ]
+    },
+    {
+      "id": "curiosity-driven-exploration",
+      "status": "done",
+      "area": "drives",
+      "risk": "low",
+      "title": "Curiosity drive: explore when bored",
+      "description": "When boredom drive is high and no user tasks pending, agent proactively explores: reads docs, analyzes code quality, proposes improvements. Turns idle time into value.",
+      "allowed_paths": [
+        "magda_agent/drives/**",
+        "magda_agent/exploration/**",
+        "tests/test_curiosity*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Boredom threshold triggers exploration",
+        "Exploration actions are safe (read-only)",
+        "Discoveries added as potential tasks",
+        "Tests with mocked drive states"
+      ]
+    },
+    {
+      "id": "response-style-adaptation",
+      "status": "done",
+      "area": "emotions",
+      "risk": "low",
+      "title": "Adapt response style to emotional state and user",
+      "description": "Emotional state and user model influence response length, formality, detail level. High arousal = shorter responses. User prefers technical = more code examples.",
+      "allowed_paths": [
+        "magda_agent/emotions/**",
+        "magda_agent/consciousness/**",
+        "tests/test_style_adaptation*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Response generator receives style parameters",
+        "Parameters derived from emotions + user model",
+        "Measurable difference in output style",
+        "Tests with different emotional states"
+      ]
+    },
+    {
+      "id": "failure-pattern-detection",
+      "status": "done",
+      "area": "metacognition",
+      "risk": "low",
+      "title": "Detect recurring failure patterns",
+      "description": "Track failures (test failures, user corrections, plan abandonment). Detect recurring patterns. Generate preventive rules. Inspired by 'did a previous error repeat' metric.",
+      "allowed_paths": [
+        "magda_agent/metacognition/**",
+        "tests/test_failure_patterns*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Failures logged with categorization",
+        "Recurring patterns detected (>2 same category)",
+        "Preventive suggestions generated",
+        "Tests with mock failure history"
+      ]
+    },
+    {
+      "id": "workspace-broadcast",
+      "status": "done",
+      "area": "attention",
+      "risk": "medium",
+      "title": "Global Workspace broadcast mechanism",
+      "description": "When workspace selects a focused event, broadcast context to all subsystems (memory, planner, emotions). Currently process_input is monolithic — workspace should mediate.",
+      "allowed_paths": [
+        "magda_agent/attention/**",
+        "magda_agent/consciousness/**",
+        "tests/test_broadcast*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Workspace broadcasts focused event to registered listeners",
+        "Subsystems receive context relevant to their function",
+        "Suppressed candidates queued for later",
+        "Tests verify broadcast reaches all listeners"
+      ]
+    },
+    {
+      "id": "skill-versioning",
+      "status": "done",
+      "area": "learning",
+      "risk": "low",
+      "title": "Skill versioning and improvement tracking",
+      "description": "Skills in procedural memory should have versions. When a skill is used and the outcome improves, create new version. Track which version works best. Inspired by Hermes 'improves skills during use'.",
+      "allowed_paths": [
+        "magda_agent/learning/**",
+        "magda_agent/memory/procedural.py",
+        "tests/test_skill_versioning*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Skills have version numbers",
+        "Usage outcomes tracked per version",
+        "Best version selected for execution",
+        "Tests with version comparison"
+      ]
+    },
+    {
+      "id": "proactive-notifications",
+      "status": "done",
+      "area": "operations",
+      "risk": "low",
+      "title": "Proactive notifications to user",
+      "description": "Agent can initiate messages to user (not only respond). Use cases: task completed, anomaly detected, scheduled report ready, memory conflict found. Respects user's notification preferences.",
+      "allowed_paths": [
+        "magda_agent/notifications/**",
+        "magda_agent/channels/**",
+        "tests/test_notifications*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent sends notifications without user prompt",
+        "Notification types configurable",
+        "User preferences respected (quiet hours, urgency threshold)",
+        "Tests with mock channel"
+      ]
+    },
+    {
+      "id": "semantic-memory-consolidation",
+      "status": "done",
+      "area": "memory",
+      "risk": "low",
+      "title": "Periodic consolidation of episodic → semantic memory",
+      "description": "Subconsciousness periodically reviews episodic memories, extracts stable facts, and promotes them to semantic memory. Decay irrelevant episodes. Inspired by sleep consolidation in neuroscience.",
+      "allowed_paths": [
+        "magda_agent/subconsciousness/**",
+        "magda_agent/memory/**",
+        "tests/test_consolidation*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Consolidation runs on schedule or trigger",
+        "Repeated patterns extracted as semantic facts",
+        "Old episodes decayed (not deleted)",
+        "Tests with mock episode history"
+      ]
+    },
+    {
+      "id": "tool-call-audit-trail",
+      "status": "done",
+      "area": "safety",
+      "risk": "low",
+      "title": "Full audit trail of all tool calls",
+      "description": "Every tool invocation logged: what, when, why (from plan), result, duration. Queryable for debugging and security review. Inspired by Prempti audit trail.",
+      "allowed_paths": [
+        "magda_agent/safety/**",
+        "magda_agent/tracing/**",
+        "tests/test_audit*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "All tool calls logged with metadata",
+        "Log queryable by time, tool, outcome",
+        "No sensitive data in logs (sanitize)",
+        "Tests verify log completeness"
+      ]
+    },
+    {
+      "id": "confidence-calibration",
+      "status": "done",
+      "area": "metacognition",
+      "risk": "low",
+      "title": "Confidence calibration for responses",
+      "description": "Agent should estimate confidence in its responses. Low confidence → add caveats, suggest verification. High confidence → direct answer. Track calibration accuracy over time.",
+      "allowed_paths": [
+        "magda_agent/metacognition/**",
+        "magda_agent/consciousness/**",
+        "tests/test_confidence*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Confidence score 0.0-1.0 for each response",
+        "Low confidence triggers caveat generation",
+        "Calibration tracked (was agent right?)",
+        "Tests with high/low confidence scenarios"
+      ]
+    },
+    {
+      "id": "interrupt-and-redirect",
+      "status": "done",
+      "area": "attention",
+      "risk": "medium",
+      "title": "Support interrupt and redirect during execution",
+      "description": "If user sends a new message while agent is mid-plan, salience should evaluate: is new input more important? If yes, pause current plan and redirect. Inspired by Hermes interrupt-and-redirect.",
+      "allowed_paths": [
+        "magda_agent/attention/**",
+        "magda_agent/planning/**",
+        "tests/test_interrupt*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "New input evaluated against current plan priority",
+        "Higher priority input pauses current plan",
+        "Paused plan resumable",
+        "Tests with mock interruption scenarios"
+      ]
+    },
+    {
+      "id": "dependency-graph-tasks",
+      "status": "done",
+      "area": "planning",
+      "risk": "medium",
+      "title": "Task dependency graphs in planner",
+      "description": "Plans should model dependencies between steps (DAG, not just list). Parallel-safe steps can execute concurrently. Inspired by Claude Code's task system with dependency graphs.",
+      "allowed_paths": [
+        "magda_agent/planning/**",
+        "tests/test_task_graph*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Plan steps can declare dependencies",
+        "Independent steps marked as parallelizable",
+        "Execution respects dependency order",
+        "Tests with diamond and linear dependencies"
+      ]
+    },
+    {
+      "id": "emotional-memory-tagging",
+      "status": "done",
+      "area": "emotions",
+      "risk": "low",
+      "title": "Tag memories with emotional context",
+      "description": "When storing episodic memories, include emotional state at time of event. Emotionally significant memories retrieved more easily (salience boost). Models how humans remember emotional events better.",
+      "allowed_paths": [
+        "magda_agent/emotions/**",
+        "magda_agent/memory/**",
+        "tests/test_emotional_memory*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Episodic memories include PAD emotional state",
+        "Retrieval boosts emotionally tagged memories",
+        "Emotional similarity as retrieval factor",
+        "Tests with emotionally tagged vs neutral memories"
+      ]
+    },
+    {
+      "id": "mcp-tools-export",
+      "status": "blocked",
+      "area": "integration",
+      "risk": "medium",
+      "title": "Export Skills as MCP-compatible Tools",
+      "description": "Implement a bridge to expose Magda's internal SkillRegistry as tools compliant with the Model Context Protocol (MCP). This enables seamless integration with other MCP-compatible clients and agents. [blocked: duplicate of done task 'mcp-tool-export']",
+      "allowed_paths": [
+        "magda_agent/skills/mcp_export.py",
+        "magda_agent/skills/registry.py",
+        "tests/test_mcp_export*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Skills can be queried in MCP format",
+        "MCP tool schema validation passes",
+        "Tests verify tool metadata export matches MCP standard"
+      ]
+    },
+    {
+      "id": "agent-guardrails-policy-layer",
+      "status": "blocked",
+      "area": "safety",
+      "risk": "medium",
+      "title": "Implement Agent Guardrails Policy Layer",
+      "description": "Introduce a runtime governance layer that intercepts all tool calls with external effects before execution. Evaluates the action against a set of safety policies (e.g., read-only assertions). Inspired by MCPKernel and Microsoft ASSERT. [blocked: duplicate of done task 'policy-layer-tool-calls']",
+      "allowed_paths": [
+        "magda_agent/safety/guardrails.py",
+        "magda_agent/skills/executor.py",
+        "magda_agent/consciousness/core.py",
+        "tests/test_guardrails*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "All skill executions pass through the guardrails layer",
+        "Policy violations are blocked and logged",
+        "Safety evaluation runs before any state mutation",
+        "Tests mock policy violations and verify blocking behavior"
+      ]
+    },
+    {
+      "id": "context-engine-plugin-architecture",
+      "status": "blocked",
+      "area": "memory",
+      "risk": "medium",
+      "title": "Context Engine Plugin Architecture",
+      "description": "Refactor Working Memory and Thalamus to support a Context Engine plugin interface with lifecycle hooks (pre_process, compress, post_process). Inspired by OpenClaw's context management. [blocked: duplicate of done task 'context-engine-plugin']",
+      "allowed_paths": [
+        "magda_agent/memory/context_engine.py",
+        "magda_agent/memory/working.py",
+        "magda_agent/thalamus/router.py",
+        "tests/test_context_engine*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Plugins can register context compression hooks",
+        "Lifecycle events are dispatched during input processing",
+        "Context engine coordinates memory modules dynamically",
+        "Tests with mock plugins verify hook invocation"
+      ]
+    },
+    {
+      "id": "agent-teams-isolation",
+      "status": "blocked",
+      "area": "architecture",
+      "risk": "high",
+      "title": "Agent Teams: multi-agent with git worktree isolation",
+      "description": "Inspired by Claude Agent SDK: implement isolated git worktrees for sub-agents to avoid stepping on each other's toes during parallel task execution. [blocked: duplicate of done task 'sub-agent-spawning']",
+      "allowed_paths": [
+        "magda_agent/agents/**",
+        "magda_agent/workspace/**",
+        "tests/test_agent_teams*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Sub-agents can check out code into isolated worktrees",
+        "Changes from sub-agents do not leak into the main repository state until merged",
+        "Tests verify isolation and concurrent execution"
+      ]
+    },
+    {
+      "id": "three-agent-planner-generator-evaluator",
+      "status": "done",
+      "area": "architecture",
+      "risk": "medium",
+      "title": "Three-agent architecture separation",
+      "description": "Inspired by Claude Agent SDK: separate the monolithic Consciousness loop into three distinct cooperative agents: Planner, Generator, Evaluator. This increases modularity and focus.",
+      "allowed_paths": [
+        "magda_agent/consciousness/**",
+        "magda_agent/agents/**",
+        "tests/test_three_agent*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Planner creates the plan",
+        "Generator executes the plan steps and generates code/text",
+        "Evaluator reviews the outcome against the acceptance criteria",
+        "Tests verify the handoff between the three roles"
+      ]
+    },
+    {
+      "id": "realtime-guardrail-fallback",
+      "status": "done",
+      "area": "safety",
+      "risk": "medium",
+      "title": "Realtime guardrail fallback",
+      "description": "Inspired by OpenAI Agents SDK: implement real-time guardrails that trigger a safe fallback action (e.g. asking for human review or stopping execution) immediately when a policy violation is detected mid-generation.",
+      "allowed_paths": [
+        "magda_agent/safety/**",
+        "magda_agent/action/**",
+        "tests/test_realtime_guardrail*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Guardrail triggers correctly on simulated policy violation during execution",
+        "System falls back to a safe state without crashing",
+        "Tests verify the fallback path is executed"
+      ]
+    },
+    {
+      "id": "agent-teams-subagents",
+      "status": "blocked",
+      "area": "architecture",
+      "risk": "high",
+      "title": "Implement Agent Teams and Subagent Spawning",
+      "description": "Inspired by Claude Agent SDK: implement sub-agents for parallel tasks with isolated Git worktrees and context compression to avoid context window explosion. [blocked: duplicate of done task 'sub-agent-spawning']",
+      "allowed_paths": [
+        "magda_agent/agents/**",
+        "magda_agent/workspace/**",
+        "tests/test_subagents*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Main agent can spawn sub-agents for specific tasks",
+        "Sub-agents run in isolated workspaces",
+        "Sub-agent results are compressed and returned to the main agent",
+        "Tests verify sub-agent creation and isolation"
+      ]
+    },
+    {
+      "id": "mcp-tools-exporter",
+      "status": "blocked",
+      "area": "integration",
+      "risk": "medium",
+      "title": "Implement MCP Server for Skills Export",
+      "description": "Inspired by the Model Context Protocol (MCP) trend: build an MCP server adapter to export Magda's internal SkillRegistry as MCP-compatible tools. [blocked: duplicate of done task 'mcp-tool-export']",
+      "allowed_paths": [
+        "magda_agent/mcp/**",
+        "magda_agent/skills/registry.py",
+        "tests/test_mcp*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "MCP server wrapper correctly exposes available skills",
+        "Tool schemas map internal parameters to MCP JSON schema correctly",
+        "Tests verify a simulated MCP client can query and execute skills"
+      ]
+    },
+    {
+      "id": "online-rl-from-feedback",
+      "status": "blocked",
+      "area": "learning",
+      "risk": "medium",
+      "title": "Online RL from User Feedback",
+      "description": "Inspired by OpenClaw-RL: implement online reinforcement learning from next-state signals (e.g., user replies after tool outputs) rather than just periodic reflection. [blocked: duplicate of done task 'online-learning-from-feedback']",
+      "allowed_paths": [
+        "magda_agent/learning/online.py",
+        "magda_agent/consciousness/core.py",
+        "tests/test_online_rl*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent analyzes immediate user response (positive/negative signal)",
+        "Strong signals immediately reinforce or penalize procedural/habit memory",
+        "Tests verify that user corrections influence future skill suggestions"
+      ]
+    },
+    {
+      "id": "a2a-protocol-adapter",
+      "status": "blocked",
+      "area": "integration",
+      "risk": "medium",
+      "title": "A2A Protocol Adapter",
+      "description": "Implement Agent-to-Agent (A2A) protocol adapter based on Google/Linux Foundation standards for peer-to-peer task delegation. [blocked: duplicate of done task 'a2a-agent-card']",
+      "allowed_paths": [
+        "magda_agent/a2a/**",
+        "tests/test_a2a*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can discover other agents via Agent Cards",
+        "Agent can delegate tasks peer-to-peer",
+        "Tests verify A2A protocol messaging"
+      ]
+    },
+    {
+      "id": "agent-teams",
+      "status": "blocked",
+      "area": "architecture",
+      "risk": "high",
+      "title": "Agent Teams with Git Worktrees",
+      "description": "Implement multi-agent architecture with Git worktree isolation for subagents, allowing parallel execution without conflicts. [blocked: duplicate of done task 'sub-agent-spawning']",
+      "allowed_paths": [
+        "magda_agent/teams/**",
+        "tests/test_agent_teams*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Main agent can spawn subagents in separate worktrees",
+        "Subagents execute tasks independently",
+        "Tests verify worktree isolation"
+      ]
+    },
+    {
+      "id": "agent-control-specification",
+      "status": "blocked",
+      "area": "safety",
+      "risk": "medium",
+      "title": "Agent Control Specification (ACS)",
+      "description": "Implement ACS standard for runtime safety controls, standardizing guardrails with 5 validation checkpoints for agentic workflows. [blocked: duplicate of done task 'policy-layer-tool-calls']",
+      "allowed_paths": [
+        "magda_agent/safety/acs*.py",
+        "tests/test_acs*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Guardrails implement the 5 ACS checkpoints",
+        "Tool calls are intercepted and validated",
+        "Tests verify policy enforcement"
+      ]
+    },
+    {
+      "id": "a2a-peer-delegation",
+      "status": "blocked",
+      "area": "integration",
+      "risk": "medium",
+      "title": "A2A Peer Delegation Support",
+      "description": "Inspired by the A2A standard trend: Enable Magda to discover other A2A-compliant agents using their Agent Cards and delegate sub-tasks peer-to-peer asynchronously. [blocked: duplicate of done task 'a2a-agent-card']",
+      "allowed_paths": [
+        "magda_agent/a2a/**",
+        "tests/test_a2a_delegation*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can read remote Agent Cards",
+        "Agent can delegate tasks based on remote capabilities",
+        "Tests verify A2A protocol messaging for delegation"
+      ]
+    },
+    {
+      "id": "skill-marketplace-integration",
+      "status": "done",
+      "area": "integration",
+      "risk": "medium",
+      "title": "Skill Marketplace Integration",
+      "description": "Inspired by the agentskills.io standard (Hermes trend): Implement a mechanism for Magda to discover and dynamically load external skills conforming to the open skill marketplace specification.",
+      "allowed_paths": [
+        "magda_agent/skills/marketplace.py",
+        "tests/test_skill_marketplace*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can query a skill marketplace endpoint",
+        "Agent can parse standard agentskills.io definitions",
+        "Tests verify integration with a mock marketplace"
+      ]
+    },
+    {
+      "id": "canvas-live-visualization",
+      "status": "done",
+      "area": "operations",
+      "risk": "low",
+      "title": "Canvas Live Visualization",
+      "description": "Inspired by the OpenClaw trend: Implement a local WebSocket server that streams Magda's internal cognitive state (current plan, active memory, emotional state) for live visualization in a Canvas UI.",
+      "allowed_paths": [
+        "magda_agent/visualization/**",
+        "tests/test_visualization*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "WebSocket server broadcasts state updates",
+        "State stream is read-only and does not block the main Consciousness loop",
+        "Tests mock WebSocket connections"
+      ]
+    },
+    {
+      "id": "mcp-compatibility",
+      "status": "blocked",
+      "area": "integration",
+      "risk": "medium",
+      "title": "MCP Compatibility (Model Context Protocol)",
+      "description": "Magda should be able to export skills as MCP tools. Inspired by AI Agent Trends docs. [blocked: duplicate of done task 'mcp-tool-export']",
+      "allowed_paths": [
+        "magda_agent/mcp/**",
+        "magda_agent/skills/registry.py",
+        "tests/test_mcp*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Magda skills are accessible via MCP standard.",
+        "Tests verify tool export."
+      ]
+    },
+    {
+      "id": "a2a-protocol-integration",
+      "status": "blocked",
+      "area": "integration",
+      "risk": "medium",
+      "title": "A2A Protocol (Agent-to-Agent Protocol)",
+      "description": "Allow Magda to discover agents and delegate tasks via Agent Cards. Inspired by AI Agent Trends docs. [blocked: duplicate of done task 'a2a-agent-card']",
+      "allowed_paths": [
+        "magda_agent/a2a/**",
+        "tests/test_a2a_protocol*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can read and process remote Agent Cards.",
+        "Peer-to-peer delegation is possible."
+      ]
+    },
+    {
+      "id": "multi-agent-workflows-f4f56e7c",
+      "status": "blocked",
+      "area": "architecture",
+      "risk": "high",
+      "title": "Multi-agent workflows",
+      "description": "Inspired by OpenAI Agents SDK and Claude Agent SDK: Establish workflows where Magda can instantiate specialized lightweight sub-agents (e.g., a 'Researcher' agent) to handle specific isolated tasks and report back. [blocked: duplicate of done task 'sub-agent-spawning']",
+      "allowed_paths": [
+        "magda_agent/agents/workflow.py",
+        "tests/test_multi_agent_workflow*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Main agent can delegate a sub-task to a specialized workflow",
+        "Sub-agent runs in an isolated context and returns structured results",
+        "Tests verify delegation and result aggregation"
+      ]
+    },
+    {
+      "id": "agent-teams-isolation-v2",
+      "status": "blocked",
+      "area": "architecture",
+      "risk": "high",
+      "title": "Implement Agent Teams Isolation",
+      "description": "Inspired by Claude Agent SDK. Implement Agent Teams for subagents using git worktrees. This will create new paths. [blocked: duplicate of done task 'sub-agent-spawning']",
+      "allowed_paths": [
+        "magda_agent/teams/**",
+        "tests/test_teams*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agents can be spawned in isolated worktrees",
+        "Tests verify isolation"
+      ]
+    },
+    {
+      "id": "mcp-tools-export-v2",
+      "status": "blocked",
+      "area": "integration",
+      "risk": "medium",
+      "title": "MCP Tools Export",
+      "description": "Inspired by MCP. Implement MCP Server adapter to export skills. This will create new paths. [blocked: duplicate of done task 'mcp-tool-export']",
+      "allowed_paths": [
+        "magda_agent/mcp/**",
+        "tests/test_mcp*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "MCP tools can be exposed",
+        "Tests mock client"
+      ]
+    },
+    {
+      "id": "agent-guardrails-policy-layer-v2",
+      "status": "blocked",
+      "area": "safety",
+      "risk": "high",
+      "title": "Implement ACS Guardrails",
+      "description": "Inspired by ACS. Implement Agent Control Specification policy layer. This will create new paths. [blocked: duplicate of done task 'policy-layer-tool-calls']",
+      "allowed_paths": [
+        "magda_agent/safety/acs.py",
+        "tests/test_acs*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Tools intercepted",
+        "Tests mock calls"
+      ]
+    },
+    {
+      "id": "context-engine-plugin-interface",
+      "status": "blocked",
+      "area": "architecture",
+      "risk": "medium",
+      "title": "Context Engine plugin interface with lifecycle hooks",
+      "description": "Inspired by the OpenClaw trend: Implement a Context Engine plugin interface with lifecycle hooks (e.g., pre_process, compress, post_process) to dynamically filter input and compress short-term context. [blocked: duplicate of done task 'context-engine-plugin']",
+      "allowed_paths": [
+        "magda_agent/context/**",
+        "tests/test_context_engine*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "ContextEngine supports registering ContextPlugin instances",
+        "Plugins execute lifecycle hooks during context processing",
+        "Tests verify plugin registration and hook execution"
+      ]
+    },
+    {
+      "id": "sub-agents-rpc",
+      "status": "blocked",
+      "area": "architecture",
+      "risk": "high",
+      "title": "Sub-agents for parallel tasks with RPC",
+      "description": "Inspired by the Hermes trend: Implement support for sub-agents to execute parallel tasks, communicating via RPC and maintaining isolated contexts for each agent. [blocked: duplicate of done task 'sub-agent-spawning']",
+      "allowed_paths": [
+        "magda_agent/agents/rpc_sub_agent.py",
+        "tests/test_rpc_sub_agent*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Main agent can spawn sub-agents via RPC",
+        "Sub-agents maintain their own isolated context",
+        "Tests verify parallel execution and RPC communication"
+      ]
+    },
+    {
+      "id": "skill-creation-from-experience-hermes",
+      "status": "blocked",
+      "area": "learning",
+      "risk": "medium",
+      "title": "Skill creation from experience loops",
+      "description": "Inspired by the Hermes trend: Implement a self-improving loop that creates and refines reusable skills based on historical interactions and experience. [blocked: duplicate of done task 'skill-creation-from-experience']",
+      "allowed_paths": [
+        "magda_agent/learning/experience_skill_creator.py",
+        "tests/test_experience_skill_creator*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "System analyzes past interactions to propose new skills",
+        "Proposed skills are persisted and can be refined",
+        "Tests mock interactions and verify skill creation"
+      ]
+    },
+    {
+      "id": "context-engine-compression-v2",
+      "status": "blocked",
+      "area": "memory",
+      "risk": "medium",
+      "title": "Context Engine selective retrieval and compression",
+      "description": "Inspired by MemGPT/Letta pattern and OpenClaw trend: Implement advanced selective retrieval and context compression to handle long dialogues and maintain virtual context window constraints. [blocked: duplicate of done task 'context-engine-plugin']",
+      "allowed_paths": [
+        "magda_agent/memory/context_engine.py",
+        "tests/test_context_engine_compression*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "ContextEngine compresses old context beyond token limits",
+        "Selective retrieval fetches highly relevant episodic memories",
+        "Tests mock LLM for compression and verify token bounds"
+      ]
+    },
+    {
+      "id": "online-rl-from-feedback-v2",
+      "status": "blocked",
+      "area": "learning",
+      "risk": "medium",
+      "title": "Online RL from user feedback",
+      "description": "Inspired by OpenClaw-RL trend: Enhance the OnlineLearner module to automatically update agent preferences and strategy embeddings directly from explicit or implicit user feedback (e.g., negative pad shifts). [blocked: duplicate of done task 'online-learning-from-feedback']",
+      "allowed_paths": [
+        "magda_agent/learning/online_rl.py",
+        "tests/test_online_rl*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent parses user feedback for reward signals",
+        "Strategy weights or preferences are adjusted online",
+        "Tests verify preference shift after feedback"
+      ]
+    },
+    {
+      "id": "mcp-action-tools-v2",
+      "status": "blocked",
+      "area": "integration",
+      "risk": "medium",
+      "title": "MCP action tools support",
+      "description": "Inspired by MCP trend where action tools grew to 65%: Implement a robust interface in MCP compatibility layer to not just export read-only skills, but full state-mutating action tools protected by policy layer. [blocked: duplicate of done task 'mcp-tool-export']",
+      "allowed_paths": [
+        "magda_agent/mcp/action_tools.py",
+        "tests/test_mcp_action_tools*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Action tools can be registered and invoked via MCP",
+        "All action tool calls must route through the Policy layer",
+        "Tests verify invocation and policy gating"
+      ]
+    },
+    {
+      "id": "task-dependency-graph",
+      "status": "blocked",
+      "area": "planning",
+      "risk": "medium",
+      "title": "Task System with Dependency Graphs",
+      "description": "Inspired by Claude Agent SDK trend: Implement a task system in the Planner module that supports dependency graphs, allowing complex multi-step tasks to be resolved sequentially or in parallel based on prerequisite requirements. [blocked: duplicate of done task 'dependency-graph-tasks']",
+      "allowed_paths": [
+        "magda_agent/planning/dependency_graph.py",
+        "tests/test_dependency_graph*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Planner can parse dependency relationships between tasks.",
+        "Independent tasks can be executed concurrently.",
+        "Tests verify dependency resolution logic."
+      ]
+    },
+    {
+      "id": "p2p-agent-discovery",
+      "status": "blocked",
+      "area": "integration",
+      "risk": "low",
+      "title": "P2P Agent Discovery via A2A Protocol",
+      "description": "Inspired by A2A Protocol trend: Enhance the A2A integration by implementing peer-to-peer agent discovery where Magda broadcasts its Agent Card capabilities over a local network or designated channel. [blocked: duplicate of done task 'a2a-agent-card']",
+      "allowed_paths": [
+        "magda_agent/a2a/discovery.py",
+        "tests/test_a2a_discovery*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Magda can broadcast its Agent Card.",
+        "Magda can receive and registry other agents' cards.",
+        "Tests mock network broadcasts to verify discovery."
+      ]
+    },
+    {
+      "id": "longitudinal-quality-metrics",
+      "status": "blocked",
+      "area": "operations",
+      "risk": "low",
+      "title": "Longitudinal Quality Metrics Tracking",
+      "description": "Inspired by Self-Improvement Loops trend: Implement SQLite-based longitudinal tracking of agent success rates, post-merge smoke tests, and SWE-bench performance to monitor continuous improvement. [blocked: duplicate of done task 'quality-metrics-tracking']",
+      "allowed_paths": [
+        "magda_agent/operations/metrics_tracker.py",
+        "tests/test_metrics_tracker*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Metrics are stored in a local SQLite database.",
+        "Tracker provides aggregated quality scores.",
+        "Tests verify insertion and aggregation without ChomaDB overhead."
+      ]
+    },
+    {
+      "id": "mcp-agent-tools-export-v3",
+      "status": "blocked",
+      "area": "integration",
+      "risk": "medium",
+      "title": "MCP Tools Export for Magda Skills",
+      "description": "Inspired by MCP trend: Implement an MCP (Model Context Protocol) Server adapter to export Magda's internal skills as standard MCP tools. [blocked: duplicate of done task 'mcp-tool-export']",
+      "allowed_paths": [
+        "magda_agent/mcp/**",
+        "tests/test_mcp*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "MCP server can expose Magda's skills as tools",
+        "Tests verify tool execution via mocked MCP client"
+      ]
+    },
+    {
+      "id": "agent-teams-isolation-v3",
+      "status": "blocked",
+      "area": "architecture",
+      "risk": "high",
+      "title": "Agent Teams Isolation using Worktrees",
+      "description": "Inspired by Claude Agent SDK: Implement isolated git worktrees for specialized subagents when working on multiple parallel feature branches to prevent state corruption. [blocked: duplicate of done task 'sub-agent-spawning']",
+      "allowed_paths": [
+        "magda_agent/teams/**",
+        "tests/test_teams*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agents can be spawned in isolated git worktrees",
+        "Tests verify file isolation between agents"
+      ]
+    },
+    {
+      "id": "agent-guardrails-policy-layer-v3",
+      "status": "blocked",
+      "area": "safety",
+      "risk": "high",
+      "title": "Implement ACS (Agent Control Specification) Guardrails",
+      "description": "Inspired by ACS trend: Implement an explicit policy layer that intercepts every tool call and evaluates it against standard ACS guardrails before execution. [blocked: duplicate of done task 'policy-layer-tool-calls']",
+      "allowed_paths": [
+        "magda_agent/safety/acs.py",
+        "tests/test_acs*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "All tools are intercepted by ACS guardrails",
+        "Dangerous tools are rejected if they violate the policy",
+        "Tests verify interception and rejection of unauthorized calls"
+      ]
+    },
+    {
+      "id": "mcp-action-tools-registry-new",
+      "status": "blocked",
+      "area": "integration",
+      "risk": "medium",
+      "title": "MCP Action Tools Registry",
+      "description": "Inspired by the MCP trend where action tools grew to 65%. Implement a tool registry that exposes Magda skills as MCP-compliant action tools that mutate state. Each tool call must go through the policy layer. [blocked: duplicate of done task 'mcp-tool-export']",
+      "allowed_paths": [
+        "magda_agent/skills/mcp_registry.py",
+        "tests/test_mcp_registry*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Skills can be exported as MCP tools.",
+        "Policy layer is integrated for all tool calls.",
+        "Tests mock MCP interactions."
+      ]
+    },
+    {
+      "id": "context-engine-canvas-vis-new",
+      "status": "blocked",
+      "area": "UI",
+      "risk": "low",
+      "title": "Context Engine Canvas Visualization",
+      "description": "Inspired by OpenClaw Canvas trend. Create a live visualization adapter for the Context Engine to broadcast the agent’s working memory and current focused tasks to an external Canvas client via websocket. [blocked: duplicate of done task 'context-engine-plugin']",
+      "allowed_paths": [
+        "magda_agent/context/canvas.py",
+        "tests/test_canvas*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "ContextEngine has an adapter to emit Canvas updates.",
+        "Updates include working memory and focused events.",
+        "Tests verify that events are structured correctly for Canvas."
+      ]
+    },
+    {
+      "id": "prempti-audit-trail-interceptor-new",
+      "status": "blocked",
+      "area": "safety",
+      "risk": "high",
+      "title": "Prempti Audit Trail Interceptor",
+      "description": "Inspired by the Agent Guard and Prempti (Falco) trend. Implement a tool-call interception module that logs an audit trail of all execution requests, their risk scores, and the policy decision, saving them to a specialized log or SQLite table. [blocked: duplicate of done task 'tool-call-audit-trail']",
+      "allowed_paths": [
+        "magda_agent/safety/audit.py",
+        "tests/test_audit*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Every tool call produces an audit trail entry.",
+        "Audit trail logs include risk level and policy outcome.",
+        "Tests verify audit logging during mock tool calls."
+      ]
+    },
+    {
+      "id": "agent-guard-runtime-governance",
+      "status": "blocked",
+      "area": "safety",
+      "risk": "medium",
+      "title": "Agent Guard: Runtime Governance Layer",
+      "description": "Inspired by the Agent Guard and Prempti trend (June 2026), implement a runtime governance layer between the agent and external actions, effectively wrapping the Policy layer into a formalized execution checkpoint. [blocked: duplicate of done task 'policy-layer-tool-calls']",
+      "allowed_paths": [
+        "magda_agent/safety/agent_guard.py",
+        "tests/test_agent_guard*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "A new AgentGuard class evaluates external tool actions",
+        "It acts as a middleware wrapping existing risk/policy checks",
+        "Tests verify tool calls are appropriately gated by AgentGuard"
+      ]
+    },
+    {
+      "id": "mcp-kernel-sandboxed-execution",
+      "status": "done",
+      "area": "security",
+      "risk": "high",
+      "title": "MCPKernel: Taint Tracking and Sandboxed Execution",
+      "description": "Inspired by the MCPKernel trend (June 2026), implement an isolated execution environment for code blocks using strict taint tracking to prevent side-channel leaks during execution.",
+      "allowed_paths": [
+        "magda_agent/security/mcp_kernel.py",
+        "tests/test_mcp_kernel*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "MCPKernel runs dynamically generated code securely",
+        "Code containing unsafe calls (network, uncontrolled FS) is blocked",
+        "Tests mock tainted executions to verify blocking"
+      ]
+    },
+    {
+      "id": "assert-policy-driven-evaluation",
+      "status": "done",
+      "area": "metacognition",
+      "risk": "low",
+      "title": "ASSERT: Policy-driven evaluation framework",
+      "description": "Inspired by Microsoft's ASSERT framework trend (June 2026), augment the Metacognition Evaluator to automatically score outputs based on explicitly defined policy documents or rules, rather than just raw heuristic scores.",
+      "allowed_paths": [
+        "magda_agent/metacognition/assert_evaluator.py",
+        "tests/test_assert_evaluator*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Evaluator accepts a list of policy constraints",
+        "LLM evaluates outputs conditionally based on satisfying these constraints",
+        "Tests mock the LLM to verify constraint-driven scoring"
+      ]
+    },
+    {
+      "id": "openclaw-rl-online-learning",
+      "status": "blocked",
+      "area": "learning",
+      "risk": "medium",
+      "title": "OpenClaw-RL Online Reinforcement Learning",
+      "description": "Inspired by OpenClaw trend: Implement an online reinforcement learning mechanism using MirrorNeurons PAD shifts from user replies to train agent simply by talking. Extract implicit feedback as next-state signals. [blocked: duplicate of done task 'online-learning-from-feedback']",
+      "allowed_paths": [
+        "magda_agent/learning/online.py",
+        "tests/test_online_learning*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent adjusts policies based on conversation PAD shifts.",
+        "Tests verify that positive feedback reinforces recent habits.",
+        "Tests verify that negative feedback triggers reflection."
+      ]
+    },
+    {
+      "id": "hermes-cron-scheduler-expansion",
+      "status": "blocked",
+      "area": "scheduler",
+      "risk": "low",
+      "title": "Hermes-inspired Cron Scheduler Expansion",
+      "description": "Inspired by Hermes Agent trend: Expand CronScheduler to support daily reports, nightly backups, and persistent scheduled tasks configurable by user. [blocked: duplicate of done task 'cron-scheduler']",
+      "allowed_paths": [
+        "magda_agent/scheduler/cron.py",
+        "magda_agent/scheduler/reports.py",
+        "tests/test_scheduler_expansion*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Users can schedule daily reports.",
+        "Scheduler persists tasks across reboots.",
+        "Tests verify job triggers and serialization."
+      ]
+    },
+    {
+      "id": "mcp-skill-export",
+      "status": "blocked",
+      "area": "skills",
+      "risk": "medium",
+      "title": "Export Skills as MCP Tools",
+      "description": "Implement a Model Context Protocol (MCP) compatible server interface to expose the agent's internal skills to external clients, aligning with the industry standard for agent-to-tool communication. [blocked: duplicate of done task 'mcp-tool-export']",
+      "allowed_paths": [
+        "magda_agent/skills/mcp_server.py",
+        "magda_agent/skills/__init__.py",
+        "tests/test_mcp_server.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "MCP server can list available skills",
+        "MCP server can execute skills via JSON-RPC",
+        "Unit tests verify MCP message format compliance"
+      ]
+    },
+    {
+      "id": "online-rl-feedback",
+      "status": "blocked",
+      "area": "learning",
+      "risk": "medium",
+      "title": "Online RL from User Feedback",
+      "description": "Implement online reinforcement learning (OpenClaw-RL pattern) where explicit positive/negative user replies (e.g., 'thanks', 'bad response') are used as next-state signals to adjust tool selection weights in the Basal Ganglia. [blocked: duplicate of done task 'online-learning-from-feedback']",
+      "allowed_paths": [
+        "magda_agent/learning/online_rl.py",
+        "magda_agent/action/selector.py",
+        "tests/test_online_rl.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "User feedback modifies action weights",
+        "Weights are persisted across sessions",
+        "Tests mock feedback and verify weight changes"
+      ]
+    },
+    {
+      "id": "agent-guard-policy",
+      "status": "blocked",
+      "area": "safety",
+      "risk": "high",
+      "title": "Agent Guard Policy Layer",
+      "description": "Implement an ACS-inspired Agent Guard policy layer that intercepts every tool call with an external effect to run an explicit allow/deny evaluation before execution. [blocked: duplicate of done task 'policy-layer-tool-calls']",
+      "allowed_paths": [
+        "magda_agent/safety/agent_guard.py",
+        "magda_agent/consciousness/core.py",
+        "tests/test_agent_guard.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "All external tool calls pass through Agent Guard",
+        "Guard can block calls based on policy rules",
+        "Blocked calls return an explanatory error to the agent"
+      ]
+    },
+    {
+      "id": "agentbench-evaluation-runner-new",
+      "status": "done",
+      "area": "evaluation",
+      "risk": "medium",
+      "title": "AgentBench Evaluation Runner",
+      "description": "Inspired by the AgentBench trend from June 2026: Implement a testing harness that allows Magda to be evaluated continuously against multi-domain agent benchmarks, reporting metrics longitudinally to an SQLite database.",
+      "allowed_paths": [
+        "magda_agent/evaluation/agentbench.py",
+        "tests/test_agentbench*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Evaluation harness can trigger a benchmark suite",
+        "Scores are stored in an SQLite metrics DB",
+        "Tests verify basic harness functionality using mocks"
+      ]
+    },
+    {
+      "id": "cross-platform-channel-adapter",
+      "status": "done",
+      "area": "integration",
+      "risk": "low",
+      "title": "Cross-Platform Channel Adapter Framework",
+      "description": "Inspired by the Cross-platform reach trend: Implement an abstract ChannelAdapter base class and a Discord adapter implementation alongside the existing Telegram bot to allow the agent to reach multiple channels simultaneously.",
+      "allowed_paths": [
+        "magda_agent/channels/**",
+        "tests/test_channels*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Abstract ChannelAdapter interface exists",
+        "A mock or Discord-specific implementation is provided",
+        "Messages are successfully routed through the UnifiedMessage pipeline"
+      ]
+    },
+    {
+      "id": "a2a-task-delegation",
+      "status": "blocked",
+      "area": "integration",
+      "risk": "medium",
+      "title": "A2A Task Delegation Protocol",
+      "description": "Inspired by A2A Protocol trend (June 2026). Implement an Agent-to-Agent communication module enabling Magda to delegate complex tasks to other specialized agents on the network. [blocked: duplicate of done task 'a2a-agent-card']",
+      "allowed_paths": [
+        "magda_agent/integration/a2a.py",
+        "tests/test_a2a_delegation*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "A2A delegation client is implemented.",
+        "Can send and receive task payloads.",
+        "Tests verify successful delegation mocking the external agent."
+      ]
+    },
+    {
+      "id": "context-compression-selective-retrieval",
+      "status": "blocked",
+      "area": "memory",
+      "risk": "medium",
+      "title": "Context Compression & Selective Retrieval",
+      "description": "Inspired by MemGPT/Letta pattern. Implement a context engine hook that aggressively compresses old working memory and uses selective retrieval from episodic memory to keep context window small. [blocked: duplicate of done task 'context-engine-plugin']",
+      "allowed_paths": [
+        "magda_agent/memory/compression.py",
+        "tests/test_compression*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Working memory size is continuously monitored.",
+        "Compression hook automatically runs when threshold is reached.",
+        "Tests verify context is shrunk correctly."
+      ]
+    },
+    {
+      "id": "mcp-action-tool-subagent",
+      "status": "blocked",
+      "area": "architecture",
+      "risk": "high",
+      "title": "MCP Subagent for Action Tools",
+      "description": "Inspired by the Hermes subagent trend. Spawn an isolated sub-agent specifically dedicated to executing complex MCP action tools, ensuring its state and context are completely separate from the main process. [blocked: duplicate of done task 'sub-agent-spawning']",
+      "allowed_paths": [
+        "magda_agent/teams/mcp_subagent.py",
+        "tests/test_mcp_subagent*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Subagent can be spawned explicitly for MCP tools.",
+        "Execution context does not bleed into main agent.",
+        "Tests verify isolated execution."
+      ]
+    },
+    {
+      "id": "mcp-skill-export-integration",
+      "status": "blocked",
+      "area": "skills",
+      "risk": "medium",
+      "title": "MCP Skill Export Integration",
+      "description": "Inspired by MCP trends: Expose Magda's internal skills dynamically over an MCP-compliant JSON-RPC server endpoint so external tools and UIs can invoke them. [blocked: duplicate of done task 'mcp-tool-export']",
+      "allowed_paths": [
+        "magda_agent/skills/mcp_server.py",
+        "tests/test_mcp_server*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Skills can be listed via MCP protocol",
+        "Skills can be executed via MCP JSON-RPC",
+        "Unit tests mock the server to verify MCP format compliance"
+      ]
+    },
+    {
+      "id": "openclaw-online-rl-feedback",
+      "status": "blocked",
+      "area": "learning",
+      "risk": "medium",
+      "title": "OpenClaw-RL Implicit Feedback Learning",
+      "description": "Inspired by OpenClaw: Implement an online reinforcement learning mechanism that adjusts tool selection weights simply by analyzing user replies using PAD shifts from MirrorNeurons. [blocked: duplicate of done task 'online-learning-from-feedback']",
+      "allowed_paths": [
+        "magda_agent/learning/online.py",
+        "magda_agent/action/selector.py",
+        "tests/test_online_learning*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "User replies act as next-state reinforcement signals",
+        "Tool selection weights in Basal Ganglia update based on positive/negative shifts",
+        "Tests mock feedback PAD to verify weight changes"
+      ]
+    },
+    {
+      "id": "agent-guard-runtime-policy",
+      "status": "blocked",
+      "area": "safety",
+      "risk": "high",
+      "title": "Agent Guard Runtime Policy Layer",
+      "description": "Inspired by ACS/Prempti trends: Implement a mandatory runtime governance policy layer that intercepts and audits every tool call with an external effect before execution. [blocked: duplicate of done task 'policy-layer-tool-calls']",
+      "allowed_paths": [
+        "magda_agent/safety/agent_guard.py",
+        "magda_agent/consciousness/core.py",
+        "tests/test_agent_guard*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "All external tool calls must pass through AgentGuard allow/deny evaluation",
+        "Guard can block actions based on explicit policy rules",
+        "Blocked actions return explanatory error feedback to the agent"
+      ]
+    },
+    {
+      "id": "mcp-server-prefixed-tool-names",
+      "status": "blocked",
+      "area": "architecture",
+      "risk": "medium",
+      "title": "MCP server-prefixed tool names",
+      "description": "Inspired by OpenAI Agents SDK trend: Implement server-prefixed tool names to manage tool concurrency and routing to specific MCP endpoints seamlessly. [blocked: duplicate of done task 'mcp-tool-export']",
+      "allowed_paths": [
+        "magda_agent/skills/mcp_router.py",
+        "magda_agent/skills/mcp_server.py",
+        "tests/test_mcp_routing*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Tool calls map prefix to correct server",
+        "Prefixes resolve locally if no server matched",
+        "Tests verify tool routing logic"
+      ]
+    },
+    {
+      "id": "runtime-function-tool-concurrency",
+      "status": "blocked",
+      "area": "execution",
+      "risk": "high",
+      "title": "Runtime function tool concurrency",
+      "description": "Inspired by OpenAI Agents SDK trend: Refactor tool execution within the agent to support resolving multiple independent tool calls concurrently rather than sequentially. [blocked: duplicate of done task 'runtime-tool-concurrency-eca483c3']",
+      "allowed_paths": [
+        "magda_agent/consciousness/core.py",
+        "magda_agent/action/executor.py",
+        "tests/test_tool_concurrency*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Multiple tool calls in one step run via asyncio.gather",
+        "Errors in one concurrent tool do not immediately crash the loop without logging",
+        "Tests mock multiple delays and assert completion time is shorter than sequential"
+      ]
+    },
+    {
+      "id": "multi-agent-workflows-git-isolation",
+      "status": "blocked",
+      "area": "architecture",
+      "risk": "critical",
+      "title": "Multi-agent workflows with Git Isolation",
+      "description": "Inspired by Claude Agent SDK and Multi-Agent Orchestration trends: Implement a mechanism to spawn independent agent teams where each agent has an isolated git worktree. [blocked: duplicate of done task 'sub-agent-spawning']",
+      "allowed_paths": [
+        "magda_agent/teams/git_worktree.py",
+        "magda_agent/teams/manager.py",
+        "tests/test_git_worktree*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Subagents operate in their own git worktrees",
+        "State is isolated and merges cleanly via explicit action",
+        "Tests create dummy repos to verify isolation"
+      ]
+    },
+    {
+      "id": "a2a-agent-cards-discovery",
+      "status": "blocked",
+      "area": "integration",
+      "risk": "medium",
+      "title": "A2A Agent Cards Discovery",
+      "description": "Inspired by the A2A trend: Implement an Agent Card discovery mechanism that broadcasts and discovers other available agents on the local network or given registry, enabling peer-to-peer delegation. [blocked: duplicate of done task 'a2a-agent-card']",
+      "allowed_paths": [
+        "magda_agent/integration/a2a_discovery.py",
+        "tests/test_a2a_discovery*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can broadcast its own Agent Card",
+        "Agent can discover other agents' cards",
+        "Tests verify discovery using mock registry"
+      ]
+    },
+    {
+      "id": "planner-task-dependency-graphs",
+      "status": "blocked",
+      "area": "planning",
+      "risk": "high",
+      "title": "Task Dependency Graphs in Planner",
+      "description": "Inspired by Claude Agent SDK: Refactor the Prefrontal Cortex (Planner) to support generating and managing execution plans as Directed Acyclic Graphs (DAGs) rather than linear steps, allowing sub-agents to run parallel steps. [blocked: duplicate of done task 'dependency-graph-tasks']",
+      "allowed_paths": [
+        "magda_agent/planning/dag_planner.py",
+        "magda_agent/planning/planner.py",
+        "tests/test_dag_planner*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Planner can parse plans with dependencies",
+        "Independent steps can be identified for parallel execution",
+        "Tests verify DAG topological sorting and execution"
+      ]
+    },
+    {
+      "id": "skill-marketplace-export",
+      "status": "done",
+      "area": "skills",
+      "risk": "medium",
+      "title": "Skill Marketplace Export",
+      "description": "Inspired by agentskills.io trend: Implement a utility to package and export successfully created skills from ProceduralMemory into a standard format (JSON/YAML) that can be uploaded to a skill marketplace.",
+      "allowed_paths": [
+        "magda_agent/skills/exporter.py",
+        "tests/test_skill_exporter*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Procedural memory skills can be exported to standard JSON/YAML format",
+        "Export includes metadata, parameters, and code",
+        "Tests verify export format validity"
+      ]
+    },
+    {
+      "id": "mcp-action-tool-subagent-team",
+      "status": "blocked",
+      "area": "architecture",
+      "risk": "high",
+      "title": "MCP Subagent Team for Isolated Action Execution",
+      "description": "Inspired by Claude Agent SDK and Multi-Agent Orchestration trends: spawn an independent agent team with isolated git worktrees specifically dedicated to executing complex MCP action tools. [blocked: duplicate of done task 'sub-agent-spawning']",
+      "allowed_paths": [
+        "magda_agent/teams/mcp_team.py",
+        "tests/test_mcp_team*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Subagent team operates in isolated git worktrees",
+        "Can execute MCP tools concurrently without context bleeding",
+        "Tests verify worktree isolation"
+      ]
+    },
+    {
+      "id": "openclaw-rl-implicit-feedback",
+      "status": "blocked",
+      "area": "learning",
+      "risk": "medium",
+      "title": "OpenClaw-RL Implicit Feedback Mechanism",
+      "description": "Inspired by OpenClaw: Implement an online reinforcement learning mechanism that trains the agent based on user replies, using PAD shifts from MirrorNeurons. [blocked: duplicate of done task 'online-learning-from-feedback']",
+      "allowed_paths": [
+        "magda_agent/learning/online_rl.py",
+        "magda_agent/action/selector.py",
+        "tests/test_online_rl*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "User replies act as reinforcement signals",
+        "Tool selection weights update dynamically",
+        "Tests mock PAD shifts to verify weight updates"
+      ]
+    },
+    {
+      "id": "agent-guard-runtime-policy-layer",
+      "status": "blocked",
+      "area": "safety",
+      "risk": "high",
+      "title": "Agent Guard Runtime Governance Policy",
+      "description": "Inspired by ACS/Prempti trends: Implement a runtime policy layer that intercepts and audits every tool call with an external effect before it is executed. [blocked: duplicate of done task 'policy-layer-tool-calls']",
+      "allowed_paths": [
+        "magda_agent/safety/runtime_guard.py",
+        "magda_agent/consciousness/core.py",
+        "tests/test_runtime_guard*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Tool calls are intercepted and audited before execution",
+        "Policy rules can deny actions",
+        "Blocked actions return explanatory feedback"
+      ]
+    },
+    {
+      "id": "agent-teams-git-worktree",
+      "status": "blocked",
+      "area": "architecture",
+      "risk": "high",
+      "title": "Agent Teams with Git Worktree Isolation",
+      "description": "Inspired by Claude Agent SDK. Enable spawning independent sub-agents that operate in their own git worktrees, preventing cross-contamination during complex multi-agent coding workflows. [blocked: duplicate of done task 'sub-agent-spawning']",
+      "allowed_paths": [
+        "magda_agent/teams/git_worktree.py",
+        "magda_agent/teams/manager.py",
+        "tests/test_git_worktree*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Sub-agents can check out code into isolated worktrees",
+        "Main process and sub-agents operate safely concurrently",
+        "Tests mock git calls and verify isolation"
+      ]
+    },
+    {
+      "id": "mcp-action-tool-governance",
+      "status": "blocked",
+      "area": "safety",
+      "risk": "medium",
+      "title": "MCP Action Tool Governance",
+      "description": "Inspired by the MCP standard. Implement a specific validation and governance layer for MCP actions to ensure external tool calls adhere to safety protocols. [blocked: duplicate of done task 'mcp-tool-export']",
+      "allowed_paths": [
+        "magda_agent/safety/mcp_governance.py",
+        "tests/test_mcp_governance*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "MCP actions pass through a specialized interceptor",
+        "Rules can block MCP actions explicitly",
+        "Tests verify block behavior"
+      ]
+    },
+    {
+      "id": "context-engine-plugins",
+      "status": "blocked",
+      "area": "memory",
+      "risk": "medium",
+      "title": "Context Engine Plugin System",
+      "description": "Inspired by OpenClaw. Create a Context Engine plugin system to allow dynamic modification and compression of WorkingMemory at various lifecycle hooks. [blocked: duplicate of done task 'context-engine-plugin']",
+      "allowed_paths": [
+        "magda_agent/memory/context_engine.py",
+        "tests/test_context_engine*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Plugins can register lifecycle hooks",
+        "Hooks can compress short-term context",
+        "Tests verify plugins alter the context payload appropriately"
+      ]
+    },
+    {
+      "id": "openclaw-rl-interactions",
+      "status": "blocked",
+      "area": "learning",
+      "risk": "medium",
+      "title": "OpenClaw-RL Interactive Learning",
+      "description": "Implement online reinforcement learning from user interactions, inspired by OpenClaw. [blocked: duplicate of done task 'online-learning-from-feedback']",
+      "allowed_paths": [
+        "magda_agent/learning/interactive_rl.py",
+        "tests/test_interactive_rl*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "User interactions feed into RL loop",
+        "RL loop updates preferences"
+      ]
+    },
+    {
+      "id": "acs-runtime-safety",
+      "status": "blocked",
+      "area": "safety",
+      "risk": "high",
+      "title": "ACS Runtime Safety Controls",
+      "description": "Implement 5 validation checkpoints for runtime safety, inspired by ACS. [blocked: duplicate of done task 'policy-layer-tool-calls']",
+      "allowed_paths": [
+        "magda_agent/safety/acs_controls.py",
+        "tests/test_acs_controls*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Checkpoints validate agent actions",
+        "Violations block actions"
+      ]
+    },
+    {
+      "id": "virtual-context-management-memgpt",
+      "status": "done",
+      "area": "memory",
+      "risk": "medium",
+      "title": "Virtual Context Management (MemGPT Pattern)",
+      "description": "Inspired by MemGPT trends: Implement virtual context management to transparently swap short-term memory (WorkingMemory) pages into EpisodicMemory, allowing the agent to manage effectively infinite context lengths via LLM commands.",
+      "allowed_paths": [
+        "magda_agent/memory/working.py",
+        "magda_agent/memory/episodic.py",
+        "magda_agent/memory/virtual_context.py",
+        "tests/test_virtual_context*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "LLM can request to page out inactive WorkingMemory items to EpisodicMemory",
+        "Context engine can transparently restore paged-out memory on demand",
+        "Tests mock LLM calls and verify paging behavior"
+      ]
+    },
+    {
+      "id": "mcpkernel-taint-tracking",
+      "status": "done",
+      "area": "safety",
+      "risk": "high",
+      "title": "MCPKernel Taint Tracking",
+      "description": "Inspired by MCPKernel and sandboxed execution trends: Implement taint tracking for user inputs passed to action tools, preventing unsanitized external commands from being blindly executed.",
+      "allowed_paths": [
+        "magda_agent/safety/taint.py",
+        "magda_agent/safety/runtime_guard.py",
+        "tests/test_taint*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "User inputs are marked as tainted",
+        "Tools executing system commands reject parameters containing tainted strings unless sanitized",
+        "Tests verify that executing a tool with tainted arguments raises a SecurityException"
+      ]
+    },
+    {
+      "id": "webarena-navigation-skills",
+      "status": "done",
+      "area": "skills",
+      "risk": "medium",
+      "title": "WebArena Navigation Skill Integration",
+      "description": "Inspired by WebArena benchmarks: Implement a proactive navigation skill that allows the agent to visually and semantically parse web pages to execute user commands directly, simulating browser interaction.",
+      "allowed_paths": [
+        "magda_agent/skills/web_navigation.py",
+        "tests/test_web_navigation*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Skill allows loading a URL and outputting semantic DOM text",
+        "Skill provides 'click' and 'type' action capabilities on identified elements",
+        "Tests verify skill functions with a mocked HTML structure"
+      ]
+    },
+    {
+      "id": "assert-policy-driven-evaluation-v2",
+      "status": "done",
+      "area": "evaluation",
+      "risk": "medium",
+      "title": "ASSERT Policy-driven Evaluation",
+      "description": "Inspired by Microsoft's ASSERT pattern: Implement a policy-driven evaluation framework where the Evaluator strictly checks outputs against predefined runtime policies.",
+      "allowed_paths": [
+        "magda_agent/metacognition/**",
+        "tests/test_assert_evaluator*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Evaluator checks outputs against policy constraints.",
+        "Violations are correctly flagged.",
+        "Tests verify that constraint checking is effective."
+      ]
+    },
+    {
+      "id": "a2a-agent-cards-discovery-v2",
+      "status": "done",
+      "area": "integration",
+      "risk": "low",
+      "title": "A2A Agent Cards Discovery",
+      "description": "Inspired by Google/Linux Foundation A2A Standard: Implement Agent Card discovery logic to dynamically discover capabilities of other network agents.",
+      "allowed_paths": [
+        "magda_agent/integration/**",
+        "tests/test_a2a_discovery*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can broadcast and fetch Agent Cards.",
+        "Discovered agents are indexed by capability.",
+        "Tests mock network and verify discovery."
+      ]
+    },
+    {
+      "id": "multi-channel-skills-sync",
+      "status": "done",
+      "area": "skills",
+      "risk": "low",
+      "title": "Multi-Channel Skills Sync",
+      "description": "Ensure skills can be uniformly executed across different platforms.",
+      "allowed_paths": [
+        "magda_agent/skills/omnichannel.py",
+        "magda_agent/skills/registry.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Skills sync properly across multiple gateways."
+      ]
+    },
+    {
+      "id": "agent-skills-mcp-export",
+      "status": "done",
+      "area": "skills",
+      "risk": "medium",
+      "title": "Agent Skills MCP Export Enhancements",
+      "description": "Support exporting dynamic agent skills as standard MCP tools.",
+      "allowed_paths": [
+        "magda_agent/skills/mcp_export.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Can export dynamic internal skills to MCP."
+      ]
+    },
+    {
+      "id": "longitudinal-quality-metrics-cli",
+      "status": "done",
+      "area": "metrics",
+      "risk": "low",
+      "title": "Longitudinal Quality Metrics CLI",
+      "description": "Track agent's success rate and quality over time via CLI.",
+      "allowed_paths": [
+        "magda_agent/metacognition/metrics_cli.py",
+        "magda_agent/metacognition/tracker.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent CLI logs and displays metrics over time."
+      ]
+    },
+    {
+      "id": "a2a-task-delegation-v3",
+      "status": "done",
+      "area": "integration",
+      "risk": "medium",
+      "title": "A2A Task Delegation (v3)",
+      "description": "Inspired by Google A2A trend: Allow PlannerAgent to discover and delegate specific sub-plans to external agents securely over MCP.",
+      "allowed_paths": [
+        "magda_agent/integration/**",
+        "magda_agent/agents/planner_agent.py",
+        "tests/test_a2a_delegation*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "PlannerAgent can query available external agents.",
+        "Sub-plans can be delegated to external agents.",
+        "Results are retrieved and integrated into the main plan context."
+      ]
+    },
+    {
+      "id": "mcp-action-tools-v3",
+      "status": "done",
+      "area": "skills",
+      "risk": "low",
+      "title": "MCP Action Tools Expansion",
+      "description": "Inspired by MCP trend: Expand GeneratorAgent's ability to execute external MCP server-prefixed tools beyond the current local SkillRegistry.",
+      "allowed_paths": [
+        "magda_agent/skills/mcp_client.py",
+        "magda_agent/agents/generator_agent.py",
+        "tests/test_mcp_client*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "GeneratorAgent can execute remote MCP action tools.",
+        "Results are collected safely with timeout limits.",
+        "Mock tests verify execution and error handling."
+      ]
+    },
+    {
+      "id": "openclaw-rl-interactive-learning-v3",
+      "status": "done",
+      "area": "learning",
+      "risk": "medium",
+      "title": "OpenClaw-RL Interactive Learning",
+      "description": "Inspired by OpenClaw trends: Implement online reinforcement learning from next-state signals like user replies to dynamically adjust agent's style, preferences, and weights.",
+      "allowed_paths": [
+        "magda_agent/learning/**",
+        "tests/test_openclaw_rl*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "User interactions affect agent weights",
+        "RL loop processes next-state signals",
+        "Tests verify adjustments from feedback"
+      ]
+    },
+    {
+      "id": "agent-teams-claude-sdk",
+      "status": "done",
+      "area": "multi-agent",
+      "risk": "high",
+      "title": "Agent Teams via Git Worktree Isolation",
+      "description": "Inspired by Claude Agent SDK: Implement Git worktree isolation when spawning Sub-Agents for concurrent task execution to prevent conflicts.",
+      "allowed_paths": [
+        "magda_agent/agents/sub_agent.py",
+        "magda_agent/isolation/**",
+        "tests/test_agent_teams*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Sub-agents spawn in isolated git worktrees",
+        "Concurrent tasks do not clash on filesystem",
+        "Tests verify isolation and cleanup"
+      ]
+    },
+    {
+      "id": "a2a-agent-discovery-v4",
+      "status": "done",
+      "area": "integration",
+      "risk": "medium",
+      "title": "A2A Agent Discovery v4",
+      "description": "Inspired by A2A Protocol trends: Implement A2A agent discovery through Agent Cards, allowing peer-to-peer delegation.",
+      "allowed_paths": [
+        "magda_agent/integration/a2a.py",
+        "tests/test_a2a_discovery_v4*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can discover peers using Agent Cards",
+        "Tests verify peer discovery process"
+      ]
+    },
+    {
+      "id": "acs-runtime-safety-controls-v4",
+      "status": "done",
+      "area": "safety",
+      "risk": "high",
+      "title": "ACS Runtime Safety Controls v4",
+      "description": "Inspired by ACS trends: Implement 5 validation checkpoints for agent workflows to standardize runtime guardrails.",
+      "allowed_paths": [
+        "magda_agent/safety/acs.py",
+        "tests/test_acs_safety_v4*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Checkpoints validate runtime workflows",
+        "Tests mock operations and verify guardrail blocks"
+      ]
+    },
+    {
+      "id": "mcp-tools-integration-v2",
+      "status": "done",
+      "area": "skills",
+      "risk": "medium",
+      "title": "MCP Tools Integration Engine",
+      "description": "Inspired by MCP standardization trend: Build an engine to seamlessly import and execute external MCP tools, converting them into Magda's native procedural skills on the fly.",
+      "allowed_paths": [
+        "magda_agent/skills/mcp_engine.py",
+        "tests/test_mcp_engine*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Engine can read MCP standard tool definitions.",
+        "Engine wraps MCP tools dynamically into skill registry.",
+        "Tests mock external MCP tool execution."
+      ]
+    },
+    {
+      "id": "online-rl-feedback-loop",
+      "status": "done",
+      "area": "learning",
+      "risk": "medium",
+      "title": "Online RL from User Feedback",
+      "description": "Inspired by OpenClaw-RL trend: Implement a feedback extraction module that adjusts the agent's style padding and prompt weights based on implicit and explicit user feedback in continuous dialogue.",
+      "allowed_paths": [
+        "magda_agent/learning/feedback_loop.py",
+        "tests/test_feedback_loop*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Feedback loop captures implicit corrections and positive affirmations.",
+        "StyleAdapter weights update based on the reinforcement signal.",
+        "Tests verify weight updates based on simulated dialogue."
+      ]
+    },
+    {
+      "id": "agent-team-delegation-protocol",
+      "status": "done",
+      "area": "multi-agent",
+      "risk": "medium",
+      "title": "Agent Team Delegation Protocol",
+      "description": "Inspired by Claude Agent SDK Agent Teams: Establish a protocol for the Prefrontal Cortex (Planner) to identify parallelizeable sub-plans and dispatch them to isolated sub-agents.",
+      "allowed_paths": [
+        "magda_agent/planning/delegation.py",
+        "tests/test_delegation*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Planner can flag steps for delegation.",
+        "Delegation module routes tasks to sub-agents and awaits results.",
+        "Tests mock sub-agent execution and verify state merge."
+      ]
+    },
+    {
+      "id": "agent-guard-runtime-governance-v2",
+      "status": "done",
+      "area": "safety",
+      "risk": "high",
+      "title": "Agent Guard: Runtime Governance Layer",
+      "description": "Inspired by the Agent Guard trend (June 2026), implement a runtime governance layer that sits between the agent's tool execution and the external world. It intercepts and evaluates tool calls according to predefined security policies.",
+      "allowed_paths": [
+        "magda_agent/safety/agent_guard.py",
+        "tests/test_agent_guard*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent Guard successfully intercepts tool calls",
+        "Tool calls are evaluated against policies before execution",
+        "Violating tool calls are blocked with appropriate logging",
+        "Tests mock tool executions to verify interception and policy enforcement"
+      ]
+    },
+    {
+      "id": "prempti-audit-trail-v2",
+      "status": "done",
+      "area": "security",
+      "risk": "medium",
+      "title": "Prempti: Tool-call interception and audit trail",
+      "description": "Inspired by the Prempti (Falco) trend, build an audit trail system that records every external tool call intercepted by the agent's policy layer. The audit log should store what was called, when, why, and the result.",
+      "allowed_paths": [
+        "magda_agent/tracing/prempti_audit.py",
+        "tests/test_prempti_audit*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Audit trail correctly logs tool call details (action, time, reason, result)",
+        "Audit data is sanitized (no raw secrets)",
+        "Tests verify audit log correctness and sanitization"
+      ]
+    },
+    {
+      "id": "agent-teams-parallel-subagents-v2",
+      "status": "done",
+      "area": "multi-agent",
+      "risk": "medium",
+      "title": "Agent Teams: Parallel Subagent Execution",
+      "description": "Inspired by Claude Agent SDK Agent Teams, implement a system where the Planner can spawn multiple subagents to work on parallelized tasks. Each subagent runs in its own isolated context.",
+      "allowed_paths": [
+        "magda_agent/agents/team_orchestrator.py",
+        "tests/test_team_orchestrator*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Team Orchestrator can spawn multiple subagents simultaneously",
+        "Subagents can execute their assigned tasks in isolated contexts",
+        "Orchestrator aggregates results from subagents successfully",
+        "Tests mock subagent executions and verify parallelization"
+      ]
+    },
+    {
+      "id": "context-engine-plugin-architecture-v3",
+      "status": "done",
+      "area": "memory",
+      "risk": "medium",
+      "title": "Context Engine Plugin Architecture",
+      "description": "Inspired by trend #4 in docs/trends.md: Implement a plugin architecture for the Context Engine to manage context dynamically using lifecycle hooks.",
+      "allowed_paths": [
+        "magda_agent/memory/context_engine.py",
+        "tests/test_context_engine_plugins*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Context engine supports plugin registration and lifecycle hooks",
+        "Tests verify plugin execution during context retrieval"
+      ]
+    },
+    {
+      "id": "scheduled-operations-cron-like-v2",
+      "status": "done",
+      "area": "scheduler",
+      "risk": "low",
+      "title": "Scheduled operations for autonomous tasks",
+      "description": "Inspired by trend #7 in docs/trends.md: Implement cron-like scheduled tasks that run autonomously without user involvement.",
+      "allowed_paths": [
+        "magda_agent/scheduler/cron.py",
+        "tests/test_scheduler_cron*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Scheduler can register cron-like tasks",
+        "Tests verify task execution without user input"
+      ]
+    },
+    {
+      "id": "a2a-peer-task-delegation-v2",
+      "status": "todo",
+      "area": "multi-agent",
+      "risk": "medium",
+      "title": "A2A Peer-to-Peer Task Delegation",
+      "description": "Inspired by the A2A trend: Implement peer-to-peer task delegation mechanism to assign sub-tasks to other agents dynamically over network.",
+      "allowed_paths": [
+        "magda_agent/integration/a2a_delegation.py",
+        "tests/test_a2a_peer_delegation*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can delegate tasks to other peers via A2A protocol",
+        "Tests verify task assignment over mocked network calls"
+      ]
+    },
+    {
+      "id": "agent-discovery-service",
+      "status": "todo",
+      "area": "multi-agent",
+      "risk": "low",
+      "title": "A2A Agent Discovery Service",
+      "description": "Inspired by the A2A trend: Build a discovery service to locate and read Agent Cards of peers in the network.",
+      "allowed_paths": [
+        "magda_agent/integration/discovery.py",
+        "tests/test_discovery_service*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can discover and retrieve Agent Cards of peers",
+        "Tests verify mock discovery and card parsing"
+      ]
+    },
+    {
+      "id": "mcpkernel-taint-tracking-db0c895d",
+      "status": "todo",
+      "area": "safety",
+      "risk": "medium",
+      "title": "MCPKernel Taint Tracking",
+      "description": "Inspired by MCPKernel trend: Implement taint tracking and sandboxed execution for external tool interactions.",
+      "allowed_paths": [
+        "magda_agent/safety/**",
+        "tests/test_mcpkernel*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Taint tracking module intercepts tool inputs",
+        "Tests verify tainted inputs are blocked"
+      ]
+    },
+    {
+      "id": "assert-policy-evaluation-fbaa6aeb",
+      "status": "todo",
+      "area": "safety",
+      "risk": "medium",
+      "title": "ASSERT Policy-Driven Evaluation",
+      "description": "Inspired by ASSERT Microsoft trend: Build a policy-driven evaluation framework to secure agentic workflows.",
+      "allowed_paths": [
+        "magda_agent/safety/**",
+        "tests/test_assert_eval*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "ASSERT evaluator evaluates workflows against policies",
+        "Tests verify framework properly identifies violations"
+      ]
+    },
+    {
+      "id": "agent-teams-git-worktree-isolation",
+      "status": "todo",
+      "area": "multi-agent",
+      "risk": "high",
+      "title": "Agent Teams Git Worktree Isolation",
+      "description": "Inspired by Claude Agent SDK Agent Teams trend: Implement multi-agent workflows with git worktree isolation to allow subagents to operate concurrently without file conflicts.",
+      "allowed_paths": [
+        "magda_agent/agents/team_isolation.py",
+        "tests/test_team_isolation*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Subagents spawn in isolated git worktrees",
+        "Concurrent tasks do not clash on filesystem",
+        "Tests verify isolation and cleanup"
+      ]
+    },
+    {
+      "id": "online-rl-feedback-integration",
+      "status": "todo",
+      "area": "learning",
+      "risk": "medium",
+      "title": "Online RL Feedback Integration",
+      "description": "Inspired by OpenClaw-RL trend: integrate online reinforcement learning from user feedback (next-state signals) directly into agent's habits.",
+      "allowed_paths": [
+        "magda_agent/learning/online_rl.py",
+        "tests/test_online_rl*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent collects explicit and implicit feedback signals",
+        "Feedback signals adjust habit weights dynamically",
+        "Tests verify weight shifts based on simulated feedback"
+      ]
+    },
+    {
+      "id": "context-engine-plugin-impl",
+      "status": "todo",
+      "area": "memory",
+      "risk": "medium",
+      "title": "Context Engine Plugin Interface",
+      "description": "Inspired by Context Engine trend: Implement a plugin-architecture for managing context with lifecycle hooks.",
+      "allowed_paths": [
+        "magda_agent/memory/context_engine.py",
+        "tests/test_context_engine*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Context engine supports plugin registration",
+        "Lifecycle hooks are triggered during context update",
+        "Tests verify plugin hooks are called"
+      ]
+    },
+    {
+      "id": "guardrails-policy-layer",
+      "status": "todo",
+      "area": "safety",
+      "risk": "medium",
+      "title": "Guardrails Policy Layer",
+      "description": "Inspired by Guardrails trend: Implement a policy layer to evaluate actions with external effects.",
+      "allowed_paths": [
+        "magda_agent/safety/guardrails.py",
+        "tests/test_guardrails*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Policy layer can evaluate and intercept tool calls",
+        "Tests verify policy enforcement"
+      ]
+    },
+    {
+      "id": "agent-teams-git-worktree-v2",
+      "status": "todo",
+      "area": "multi-agent",
+      "risk": "high",
+      "title": "Agent Teams with Git Worktree Isolation",
+      "description": "Inspired by Agent Teams trend: Spawn sub-agents for parallel tasks using git worktree isolation.",
+      "allowed_paths": [
+        "magda_agent/agents/teams.py",
+        "tests/test_teams*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Team manager can spawn sub-agents",
+        "Sub-agents operate in isolated git worktrees",
+        "Tests mock sub-agent parallel execution"
+      ]
+    },
+    {
+      "id": "mcp-action-tool-exporter-v4",
+      "status": "todo",
+      "area": "integration",
+      "risk": "medium",
+      "title": "MCP Action Tool Exporter",
+      "description": "Inspired by the MCP (Model Context Protocol) trend: Implement a module that automatically wraps Magda's internal skills into MCP-compatible JSON-RPC action tools.",
+      "allowed_paths": [
+        "magda_agent/integration/mcp_exporter.py",
+        "tests/test_mcp_exporter*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Skills can be exported as MCP tools.",
+        "Exported tools conform to JSON-RPC client-server interface.",
+        "Tests verify successful skill wrapping and invocation."
+      ]
+    },
+    {
+      "id": "a2a-peer-delegation-protocol-v4",
+      "status": "todo",
+      "area": "multi-agent",
+      "risk": "high",
+      "title": "A2A Peer Delegation Protocol",
+      "description": "Inspired by the A2A (Agent-to-Agent) Protocol trend: Build an async-first network layer to allow Magda to discover other agents and delegate specific task steps to them.",
+      "allowed_paths": [
+        "magda_agent/integration/a2a_protocol.py",
+        "tests/test_a2a_protocol*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can discover peers.",
+        "Agent can successfully delegate a task payload to a peer.",
+        "Tests mock network calls and verify correct delegation formats."
+      ]
+    },
+    {
+      "id": "agent-guard-runtime-safety-v4",
+      "status": "todo",
+      "area": "safety",
+      "risk": "high",
+      "title": "Agent Guard Runtime Safety Controls",
+      "description": "Inspired by ACS (Agent Control Specification): Implement a set of 5 runtime validation checkpoints to intercept and validate tool outputs before applying state changes.",
+      "allowed_paths": [
+        "magda_agent/safety/acs_guard.py",
+        "tests/test_acs_guard*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "The 5 validation checkpoints are enforced on state-changing actions.",
+        "Violations block the action and raise an alert.",
+        "Tests cover each checkpoint with valid and invalid payloads."
+      ]
+    },
+    {
+      "id": "skill-creation-from-experience-v2",
+      "status": "todo",
+      "area": "learning",
+      "risk": "medium",
+      "title": "Skill creation from experience",
+      "description": "Inspired by trend: Skill creation from experience (Hermes). Implement a module to dynamically create and refine procedural skills based on past successful task executions.",
+      "allowed_paths": [
+        "magda_agent/learning/skill_extraction.py",
+        "tests/test_skill_extraction*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "System extracts successful procedures into new skills",
+        "Tests verify skill creation from mocked experience logs"
+      ]
+    },
+    {
+      "id": "longitudinal-quality-metrics-v2",
+      "status": "todo",
+      "area": "evaluation",
+      "risk": "low",
+      "title": "Longitudinal quality metrics",
+      "description": "Inspired by trend: Longitudinal quality metrics. Implement a tracking module to evaluate agent performance over multiple iterations, rather than just single-pass testing.",
+      "allowed_paths": [
+        "magda_agent/evaluation/longitudinal.py",
+        "tests/test_longitudinal_metrics*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Module records performance metrics over time",
+        "Tests verify metric aggregation and trend reporting"
+      ]
+    },
+    {
+      "id": "online-rl-user-feedback-v2",
+      "status": "todo",
+      "area": "learning",
+      "risk": "medium",
+      "title": "Online RL from user feedback",
+      "description": "Inspired by trend: Online RL from user feedback. Implement an online reinforcement learning loop to update agent behavior based on explicit user feedback and tool success signals.",
+      "allowed_paths": [
+        "magda_agent/learning/online_rl.py",
+        "tests/test_online_rl_feedback*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Feedback signals adjust habit weights dynamically",
+        "Tests verify weight shifts based on simulated feedback"
+      ]
+    },
+    {
+      "id": "a2a-peer-delegation-v5",
+      "status": "todo",
+      "area": "multi-agent",
+      "risk": "medium",
+      "title": "A2A Peer Delegation Support v5",
+      "description": "Inspired by the A2A trend: Ensure the agent can delegate tasks to A2A compliant peers.",
+      "allowed_paths": [
+        "magda_agent/integration/a2a_peer.py",
+        "tests/test_a2a_peer.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent delegates tasks successfully to simulated A2A peer"
+      ]
+    },
+    {
+      "id": "mcp-context-exporter",
+      "status": "todo",
+      "area": "integration",
+      "risk": "medium",
+      "title": "MCP Context Exporter",
+      "description": "Inspired by MCP standard trend: Expose Magda's Context Engine memory states as MCP tools.",
+      "allowed_paths": [
+        "magda_agent/integration/mcp_context.py",
+        "tests/test_mcp_context.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Memory state can be exported and accessed via MCP interface"
+      ]
+    },
+    {
+      "id": "a2a-protocol-integration-v4",
+      "status": "todo",
+      "area": "multi-agent",
+      "risk": "medium",
+      "title": "Agent-to-Agent (A2A) Protocol integration",
+      "description": "Inspired by A2A trend: integrate Agent discovery via Agent Cards and peer-to-peer task delegation.",
+      "allowed_paths": [
+        "magda_agent/integration/a2a_protocol_integration.py",
+        "tests/test_a2a_protocol_integration.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can discover and connect to peers using A2A protocol."
+      ]
+    },
+    {
+      "id": "acs-runtime-safety-controls-v2",
+      "status": "todo",
+      "area": "safety",
+      "risk": "medium",
+      "title": "ACS runtime safety controls",
+      "description": "Inspired by ACS trend: Implement 5 validation checkpoints for runtime safety controls.",
+      "allowed_paths": [
+        "magda_agent/safety/acs_controls.py",
+        "tests/test_acs_controls.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "ACS checkpoints are enforced during tool execution."
+      ]
+    },
+    {
+      "id": "scheduled-operations-cron",
+      "status": "todo",
+      "area": "operations",
+      "risk": "medium",
+      "title": "Scheduled operations cron-like tasks",
+      "description": "Inspired by trend: Scheduled operations — cron-подобные задачи без участия пользователя. Implement cron-like scheduled tasks that the agent can run autonomously.",
+      "allowed_paths": [
+        "magda_agent/operations/cron.py",
+        "tests/test_cron.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can schedule and execute background tasks autonomously",
+        "Tests verify task execution according to schedule"
+      ]
+    },
+    {
+      "id": "skill-marketplace-agentskills-compatibility",
+      "status": "todo",
+      "area": "integration",
+      "risk": "medium",
+      "title": "Skill marketplace compatibility",
+      "description": "Inspired by trend: Skill marketplace — совместимость с agentskills.io. Ensure skills are compatible with standard skill marketplace formats.",
+      "allowed_paths": [
+        "magda_agent/integration/skill_marketplace.py",
+        "tests/test_skill_marketplace_integration.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can export skills to agentskills.io format",
+        "Tests verify successful export format"
+      ]
+    },
+    {
+      "id": "a2a-json-rpc-server",
+      "status": "todo",
+      "area": "integration",
+      "risk": "medium",
+      "title": "A2A JSON-RPC Server Interface",
+      "description": "Inspired by MCP JSON-RPC client-server interface trend: Implement a JSON-RPC server endpoint for Magda to receive A2A requests from other agents.",
+      "allowed_paths": [
+        "magda_agent/integration/a2a_server.py",
+        "tests/test_a2a_server.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Magda can start a JSON-RPC server.",
+        "Magda can receive and parse A2A task delegation requests over JSON-RPC.",
+        "Valid requests are routed to the Planner for execution."
+      ]
+    },
+    {
+      "id": "a2a-async-auth-tracing",
+      "status": "todo",
+      "area": "integration",
+      "risk": "high",
+      "title": "A2A Enterprise-Ready Async Auth and Tracing",
+      "description": "Inspired by A2A Protocol trend (Async-first, enterprise-ready auth, tracing, monitoring): Add authentication and tracing mechanisms to the A2A Discovery and Delegation modules.",
+      "allowed_paths": [
+        "magda_agent/integration/a2a_security.py",
+        "magda_agent/integration/a2a_discovery.py",
+        "magda_agent/integration/a2a_delegation.py",
+        "tests/test_a2a_security*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "A2A requests require authentication tokens.",
+        "A2A task delegations and discoveries are logged in the audit trail.",
+        "Unauthorized A2A requests are rejected."
+      ]
+    },
+    {
+      "id": "context-engine-plugin-arch",
+      "status": "todo",
+      "area": "memory",
+      "risk": "medium",
+      "title": "Context Engine plugin architecture",
+      "description": "Inspired by trend 'Context Engine — plugin-архитектура для управления контекстом': Implement a plugin interface with lifecycle hooks for managing working memory context.",
+      "allowed_paths": [
+        "magda_agent/memory/context_engine.py",
+        "tests/test_context_engine*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Context engine supports plugins",
+        "Plugins can hook into lifecycle events",
+        "Tests verify plugin execution"
+      ]
+    },
+    {
+      "id": "agent-teams-sub-agents",
+      "status": "todo",
+      "area": "multi-agent",
+      "risk": "high",
+      "title": "Agent Teams sub-agents spawning",
+      "description": "Inspired by trend 'Agent Teams — порождение sub-agents для параллельных задач': Enable the Planner/Manager to spawn isolated sub-agents for parallel task execution.",
+      "allowed_paths": [
+        "magda_agent/agents/teams.py",
+        "tests/test_agent_teams*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Manager can spawn sub-agents",
+        "Sub-agents execute tasks in parallel",
+        "Tests verify parallel execution and result gathering"
+      ]
+    },
+    {
+      "id": "cross-platform-reach-channels",
+      "status": "todo",
+      "area": "gateway",
+      "risk": "low",
+      "title": "Cross-platform reach across channels",
+      "description": "Inspired by trend 'Cross-platform reach — один агент, много каналов': Expand the Multi-channel Gateway to support more platforms beyond Telegram.",
+      "allowed_paths": [
+        "magda_agent/gateway/channels.py",
+        "tests/test_gateway_channels*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Gateway supports additional mocked channels",
+        "UnifiedMessage format remains consistent",
+        "Tests verify message routing from new channels"
+      ]
+    },
+    {
+      "id": "mcp-server-prefixed-tools",
+      "status": "todo",
+      "area": "integration",
+      "risk": "medium",
+      "title": "MCP server-prefixed tools support",
+      "description": "Inspired by OpenAI Agents SDK trend: Implement support for MCP server-prefixed tool names to properly route tool calls to external MCP servers.",
+      "allowed_paths": [
+        "magda_agent/skills/mcp_client.py",
+        "tests/test_mcp_client*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "System recognizes and routes MCP server-prefixed tool names",
+        "Tests verify correct routing"
+      ]
+    },
+    {
+      "id": "realtime-guardrail-fallback-v2",
+      "status": "todo",
+      "area": "safety",
+      "risk": "medium",
+      "title": "Realtime guardrail fallback",
+      "description": "Inspired by OpenAI Agents SDK trend: Implement realtime guardrail fallback mechanisms when tools or actions fail policy checks.",
+      "allowed_paths": [
+        "magda_agent/safety/guardrails.py",
+        "tests/test_guardrails*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "System gracefully falls back when guardrails trigger",
+        "Tests verify fallback behavior"
+      ]
+    },
+    {
+      "id": "openclaw-live-canvas-visualizer",
+      "status": "todo",
+      "area": "gateway",
+      "risk": "medium",
+      "title": "Canvas live visualization support",
+      "description": "Inspired by trend: OpenClaw - Canvas для live визуализации. Add visualization capabilities and state streaming to the context engine.",
+      "allowed_paths": [
+        "magda_agent/gateway/canvas.py",
+        "tests/test_canvas*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Canvas state is updated dynamically",
+        "Tests verify component updates without regressions"
+      ]
+    },
+    {
+      "id": "mcpkernel-taint-tracking-sandbox",
+      "status": "todo",
+      "area": "safety",
+      "risk": "high",
+      "title": "MCPKernel Taint Tracking Sandbox",
+      "description": "Inspired by trend: MCPKernel: taint tracking + sandboxed execution. Add taint tracking to tool outputs before they modify state or network.",
+      "allowed_paths": [
+        "magda_agent/safety/taint.py",
+        "tests/test_taint*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Tainted inputs correctly raise policy violations",
+        "Tests verify isolation and taint propagation"
+      ]
+    },
+    {
+      "id": "post-merge-smoke-tests-evaluator",
+      "status": "todo",
+      "area": "evaluation",
+      "risk": "medium",
+      "title": "Post-merge smoke tests evaluator",
+      "description": "Inspired by trend: Post-merge smoke tests. Evaluate codebase dynamically via smoke testing after new code is merged.",
+      "allowed_paths": [
+        "magda_agent/evaluation/smoke.py",
+        "tests/test_smoke*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Smoke tests correctly identify functionality breakdown",
+        "Evaluator module integrates post-merge hooks seamlessly"
+      ]
+    },
+    {
+      "id": "openclaw-sub-agents-rpc-v1",
+      "status": "todo",
+      "area": "architecture",
+      "risk": "high",
+      "title": "OpenClaw Sub-agents RPC v1",
+      "description": "Inspired by OpenClaw trends: Implement sub-agents for parallel tasks with RPC and isolated context.",
+      "allowed_paths": [
+        "magda_agent/architecture/sub_agents.py",
+        "tests/test_sub_agents_v1.py"
+      ],
+      "acceptance": [
+        "Sub-agents can be spawned and communicated with via RPC",
+        "Tests mock RPC calls and verify isolated contexts"
+      ]
+    },
+    {
+      "id": "runtime-function-tool-concurrency-v1",
+      "status": "todo",
+      "area": "skills",
+      "risk": "medium",
+      "title": "Runtime function tool concurrency v1",
+      "description": "Inspired by OpenAI Agents SDK trends: Add support for concurrent execution of function tools during agent runtime.",
+      "allowed_paths": [
+        "magda_agent/skills/concurrency.py",
+        "tests/test_tool_concurrency_v1.py"
+      ],
+      "acceptance": [
+        "Agent can execute multiple tool calls concurrently",
+        "Tests mock tools and verify concurrent execution speeds up processing"
+      ]
+    },
+    {
+      "id": "online-rl-from-feedback-v4",
+      "status": "todo",
+      "area": "learning",
+      "risk": "medium",
+      "title": "Online RL from user feedback v4",
+      "description": "Inspired by trend: Online RL from user feedback. Implement online reinforcement learning to adjust agent behavior based on implicit and explicit feedback.",
+      "allowed_paths": [
+        "magda_agent/learning/online_rl.py",
+        "tests/test_online_rl.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can update its model dynamically based on feedback",
+        "Tests verify RL logic"
+      ]
+    },
+    {
+      "id": "assert-policy-framework",
+      "status": "todo",
+      "area": "evaluation",
+      "risk": "medium",
+      "title": "ASSERT Policy-Driven Evaluation",
+      "description": "Inspired by trend: ASSERT (Microsoft): policy-driven evaluation framework. Introduce a policy-driven evaluation framework for the agent.",
+      "allowed_paths": [
+        "magda_agent/evaluation/assert_eval.py",
+        "tests/test_assert_eval.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Policy framework correctly evaluates agent responses",
+        "Tests verify evaluation correctness"
+      ]
+    },
+    {
+      "id": "agentbench-multi-domain-eval",
+      "status": "todo",
+      "area": "evaluation",
+      "risk": "low",
+      "title": "AgentBench Multi-domain Evaluation",
+      "description": "Inspired by trend: AgentBench: multi-domain. Integrate multi-domain benchmark tests into the agent's evaluation pipeline.",
+      "allowed_paths": [
+        "magda_agent/evaluation/agentbench.py",
+        "tests/test_agentbench.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "AgentBench tests can be run against the agent",
+        "Tests pass the multi-domain benchmark baseline"
+      ]
+    },
+    {
+      "id": "runtime-function-tool-concurrency-v2",
+      "status": "todo",
+      "area": "skills",
+      "risk": "medium",
+      "title": "Runtime function tool concurrency v2",
+      "description": "Inspired by OpenAI Agents SDK trend: Implement robust runtime function tool concurrency for Magda skills.",
+      "allowed_paths": [
+        "magda_agent/skills/mcp_engine.py",
+        "tests/test_tool_concurrency*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Tools can be executed concurrently.",
+        "Test passes."
+      ]
+    },
+    {
+      "id": "realtime-guardrail-fallback-v3",
+      "status": "todo",
+      "area": "safety",
+      "risk": "medium",
+      "title": "Realtime guardrail fallback v3",
+      "description": "Inspired by OpenAI Agents SDK trend: Realtime guardrail fallback mechanisms during tool execution.",
+      "allowed_paths": [
+        "magda_agent/safety/acs.py",
+        "tests/test_acs*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Fallback is triggered on guardrail violation.",
+        "Test passes."
+      ]
+    },
+    {
+      "id": "hermes-agent-skills-io-v2",
+      "status": "todo",
+      "area": "integration",
+      "risk": "medium",
+      "title": "Hermes agentskills.io export compatibility",
+      "description": "Inspired by Hermes Agent trend: Skill marketplace — совместимость с agentskills.io. Ensure magda can export skills using the open agentskills.io standard.",
+      "allowed_paths": [
+        "magda_agent/skills/agentskills_export.py",
+        "tests/test_agentskills_export.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can export tools matching the agentskills.io schema.",
+        "Tests verify schema validation for exported skills."
+      ]
+    },
+    {
+      "id": "openclaw-rl-next-state-signals-v3",
+      "status": "todo",
+      "area": "learning",
+      "risk": "medium",
+      "title": "OpenClaw-RL Online reinforcement learning from Next-State",
+      "description": "Inspired by OpenClaw-RL trend: implement online learning directly from next-state signals (user replies, tool outputs) without separate annotation.",
+      "allowed_paths": [
+        "magda_agent/learning/openclaw_rl.py",
+        "tests/test_openclaw_rl*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Learning module updates weights based on next-state signals.",
+        "Tests simulate conversation to verify learning."
+      ]
+    },
+    {
+      "id": "claude-evaluator-module-v2",
+      "status": "todo",
+      "area": "multi-agent",
+      "risk": "medium",
+      "title": "Claude Evaluator Agent Team Module",
+      "description": "Inspired by Claude Agent SDK (Planner, Generator, Evaluator): Implement an Evaluator Agent module to evaluate the Generator's outputs before finalizing.",
+      "allowed_paths": [
+        "magda_agent/agents/evaluator.py",
+        "tests/test_evaluator_agent*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Evaluator agent can score Generator output.",
+        "Tests mock LLM and verify evaluation workflow."
+      ]
+    },
+    {
+      "id": "memory-virtual-context-compression",
+      "status": "todo",
+      "area": "memory",
+      "risk": "medium",
+      "title": "Virtual context management and compression",
+      "description": "Inspired by trend: Virtual context management (MemGPT/Letta pattern). Implement context compression and selective retrieval to prevent context window exhaustion.",
+      "allowed_paths": [
+        "magda_agent/memory/virtual_context.py",
+        "tests/test_virtual_context.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Module can compress context effectively.",
+        "Module can selectively page memories in and out.",
+        "Tests verify compression and retrieval mechanisms."
+      ]
+    },
+    {
+      "id": "hierarchical-agent-delegation-isolation",
+      "status": "todo",
+      "area": "multi-agent",
+      "risk": "high",
+      "title": "Hierarchical agent delegation with isolation",
+      "description": "Inspired by trend: Hierarchical delegation with git worktree isolation. Enhance the agent architecture to spawn sub-agents for parallel tasks in isolated environments.",
+      "allowed_paths": [
+        "magda_agent/architecture/hierarchical_delegation.py",
+        "tests/test_hierarchical_delegation.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can dynamically spawn sub-agents.",
+        "Sub-agents run in isolated git worktrees.",
+        "Tests verify isolated task execution."
+      ]
+    },
+    {
+      "id": "realtime-guardrail-fallback-v4",
+      "status": "todo",
+      "area": "safety",
+      "risk": "medium",
+      "title": "Realtime guardrail fallback v4",
+      "description": "Inspired by OpenAI Agents SDK trend: Realtime guardrail fallback mechanisms during tool execution. Implement a more robust fallback system.",
+      "allowed_paths": [
+        "magda_agent/safety/guardrails_v4.py",
+        "tests/test_guardrails_v4*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Fallback is triggered on guardrail violation.",
+        "System gracefully degrades without crashing.",
+        "Tests pass."
+      ]
+    },
+    {
+      "id": "hermes-persistent-memory-v1",
+      "status": "todo",
+      "area": "memory",
+      "risk": "medium",
+      "title": "Hermes Persistent Memory",
+      "description": "Inspired by Hermes Agent trend: Persistent memory: чем дольше работает, тем лучше знает пользователя. Implement a persistent user profile memory.",
+      "allowed_paths": [
+        "magda_agent/memory/hermes_persistent.py",
+        "tests/test_hermes_persistent.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Persistent memory stores user traits over time",
+        "Tests verify trait accumulation"
+      ]
+    },
+    {
+      "id": "openclaw-context-engine-hooks",
+      "status": "todo",
+      "area": "architecture",
+      "risk": "high",
+      "title": "OpenClaw Context Engine Lifecycle Hooks",
+      "description": "Inspired by OpenClaw trend: Context Engine plugin interface с lifecycle hooks. Implement lifecycle hooks for plugins.",
+      "allowed_paths": [
+        "magda_agent/architecture/context_hooks.py",
+        "tests/test_context_hooks.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Plugins can register lifecycle hooks",
+        "Hooks are triggered accurately",
+        "Tests verify hook execution"
+      ]
+    },
+    {
+      "id": "a2a-discovery-agent-cards-v1",
+      "status": "todo",
+      "area": "architecture",
+      "risk": "medium",
+      "title": "A2A Discovery via Agent Cards",
+      "description": "Inspired by trend: A2A (Agent-to-Agent Protocol) Agent discovery через Agent Cards. Implement a discovery service that locates and connects to other agents using standard Agent Cards.",
+      "allowed_paths": [
+        "magda_agent/architecture/a2a_discovery.py",
+        "tests/test_a2a_discovery*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Agent can broadcast and receive Agent Cards",
+        "Discovered agents are registered in local cache",
+        "Tests mock network operations"
+      ]
+    },
+    {
+      "id": "acs-guardrails-policy-layer-v1",
+      "status": "todo",
+      "area": "safety",
+      "risk": "high",
+      "title": "ACS Guardrails Policy Layer",
+      "description": "Inspired by trend: ACS (Agent Control Specification) - 5 validation checkpoints. Implement a comprehensive policy layer implementing the 5 standard ACS checkpoints for tool execution.",
+      "allowed_paths": [
+        "magda_agent/safety/acs_policy.py",
+        "tests/test_acs_policy*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "All 5 ACS checkpoints are validated before tool execution",
+        "Violation triggers clear FallbackStrategy",
+        "Tests verify each checkpoint"
+      ]
+    },
+    {
+      "id": "openclaw-canvas-live-visualization",
+      "status": "todo",
+      "area": "ui",
+      "risk": "medium",
+      "title": "OpenClaw Canvas Live Visualization",
+      "description": "Inspired by trend: OpenClaw Canvas для live визуализации. Implement an interface for live visualization of the agent's internal state and working memory.",
+      "allowed_paths": [
+        "magda_agent/ui/canvas.py",
+        "tests/test_canvas*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Canvas can render current working memory and state",
+        "Canvas state updates dynamically upon agent state changes",
+        "Tests verify state representation"
+      ]
+    },
+    {
+      "id": "claude-agent-teams-subagent-spawning",
+      "status": "todo",
+      "area": "multi-agent",
+      "risk": "high",
+      "title": "Agent Teams Subagent Spawning",
+      "description": "Inspired by trend: Agent Teams: multi-agent с git worktree isolation / Subagent spawning. Implement a dedicated service to dynamically spawn, monitor, and clean up task-specific subagents.",
+      "allowed_paths": [
+        "magda_agent/multi_agent/team_spawner.py",
+        "tests/test_team_spawner*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "Spawner can create isolated subagent processes",
+        "Spawner cleans up processes upon task completion",
+        "Tests verify full lifecycle management"
+      ]
+    },
+    {
+      "id": "openclaw-rl-reinforcement-learning-v2",
+      "status": "todo",
+      "area": "learning",
+      "risk": "medium",
+      "title": "OpenClaw-RL Online Reinforcement Learning",
+      "description": "Inspired by trend: OpenClaw-RL: online reinforcement learning из next-state signals (user replies, tool outputs). Implement an online learning loop that updates behavior based on user replies.",
+      "allowed_paths": [
+        "magda_agent/learning/openclaw_rl.py",
+        "tests/test_openclaw_rl*.py",
+        "agent_tasks.json"
+      ],
+      "acceptance": [
+        "RL model dynamically updates from next-state signals",
+        "Model improvements are verified in tests",
+        "Tests pass"
+      ]
+    }
+  ]
+}

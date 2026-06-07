@@ -36,3 +36,22 @@ A standard web UI doesn't fit a hacky, raw developer tool. To give the app a pre
 - Dynamic color-coded HTML badges for the Slop Score (green for human, amber for mild slop, glowing red for pure slop).
 
 The result is a responsive, aesthetically rich, and brutally honest AI review dashboard that runs in any environment.
+
+---
+
+## Phase 2: Integrating the Magda AGI Cognitive Agent
+To expand the capabilities of our hackathon project, we integrated **Magda-agent**, an experimental cognitive AGI agent architecture, directly into our application.
+
+### 1. Multi-Threaded Process Architecture
+The Magda agent runs as a cognitive system with multiple entry points:
+- A FastAPI Consciousness API backend (`magda_agent.api`) exposing endpoints for state, thought tracing, and autonomous tasks.
+- A Telegram bot runner (`magda_agent.main`) using `aiogram` for user interaction.
+- A background scheduler (`magda_agent.scheduler.cron`) running periodic reflection cycles.
+
+To avoid requiring separate terminal runs, we updated `app.py` to automatically load credentials from a local `.env` file and spawn both the FastAPI backend and the Telegram bot in background daemon threads during startup.
+
+### 2. Dual-Tab Gradio Dashboard
+We restructured the Gradio UI into a tabbed layout. The second tab exposes the "Magda AGI Agent Console", giving developers direct control and visibility of the agent:
+- **Interactive Chat:** Message the agent directly. The UI calls the Consciousness engine and prints both the reply and the underlying **Thought Chain Trace** (the step-by-step reasoning steps of the LLM).
+- **Mind State Visualizer:** Pulls active emotional state (Pleasure-Arousal-Dominance model) and memory context.
+- **Autonomous Task Manager:** Displays the task list from `agent_tasks.json` in a table and enables queueing, pausing, resuming, and cancelling long-running tasks.

@@ -1,0 +1,155 @@
+import pytest
+from unittest.mock import AsyncMock, MagicMock
+from magda_agent.emotions.attachment import AttachmentModel
+from magda_agent.consciousness.core import Consciousness
+from magda_agent.emotions.engine import EmotionalEngine
+from magda_agent.memory.storage import MemorySystem
+from magda_agent.skills.registry import SkillRegistry
+
+def test_attachment_progression():
+    model = AttachmentModel()
+    user_id = 123
+
+    # Initial state (0 interactions)
+    assert model.get_level(user_id) == "stranger"
+    assert "Stranger" in model.get_attachment_prompt(user_id)
+
+    # 1-2 interactions -> stranger
+    model.record_interaction(user_id)
+    model.record_interaction(user_id)
+    assert model.get_level(user_id) == "stranger"
+
+    # 3-5 interactions -> acquaintance
+    model.record_interaction(user_id)
+    assert model.get_level(user_id) == "acquaintance"
+    assert "Acquaintance" in model.get_attachment_prompt(user_id)
+
+    model.record_interaction(user_id)
+    model.record_interaction(user_id)
+    assert model.get_level(user_id) == "acquaintance"
+
+    # 6-9 interactions -> friend
+    model.record_interaction(user_id)
+    assert model.get_level(user_id) == "friend"
+    assert "Friend" in model.get_attachment_prompt(user_id)
+
+    model.record_interaction(user_id)
+    model.record_interaction(user_id)
+    model.record_interaction(user_id)
+    assert model.get_level(user_id) == "friend"
+
+    # 10+ interactions -> close_friend
+    model.record_interaction(user_id)
+    assert model.get_level(user_id) == "close_friend"
+    assert "Close Friend" in model.get_attachment_prompt(user_id)
+
+@pytest.mark.asyncio
+async def test_consciousness_attachment_integration():
+    llm_mock = MagicMock()
+    llm_mock.get_system_prompt.return_value = "Base System Prompt"
+    llm_mock.chat_completion = AsyncMock(return_value="Mocked response")
+
+    emotions = EmotionalEngine()
+    emotions.get_summary = MagicMock(return_value="Current Emotion: Neutral")
+
+    memory = MemorySystem()
+    skills = SkillRegistry()
+
+    attachment = AttachmentModel()
+    user_id = 999
+
+    consciousness = Consciousness(
+        llm=llm_mock,
+        emotions=emotions,
+        memory=memory,
+        skills=skills,
+        attachment=attachment
+    )
+
+    # First interaction - should be stranger
+    await consciousness.process_input("Hello", user_id)
+
+    # Check that record_interaction was called implicitly because level should have increased by 1
+    assert attachment.user_interactions[user_id] == 1
+
+    # Check get_system_prompt was called with the attachment prompt
+    call_args = llm_mock.get_system_prompt.call_args[1]
+    assert "Stranger" in call_args["emotions"]
+    assert "Current Emotion: Neutral" in call_args["emotions"]
+
+    # Fast forward to 10 interactions (close_friend)
+    attachment.user_interactions[user_id] = 9
+    await consciousness.process_input("We know each other well", user_id)
+
+    # Now it should be 10 (close friend)
+    assert attachment.user_interactions[user_id] == 10
+    call_args_2 = llm_mock.get_system_prompt.call_args[1]
+    assert "Close Friend" in call_args_2["emotions"]
+
+def test_attachment_reset():
+    model = AttachmentModel()
+    user_id = 123
+    model.record_interaction(user_id)
+    model.record_interaction(user_id)
+    model.record_interaction(user_id)
+    assert model.get_level(user_id) == "acquaintance"
+
+    model.reset(user_id)
+    assert model.get_level(user_id) == "stranger"
+
+def test_attachment_anonymous_user():
+    model = AttachmentModel()
+    model.record_interaction(None)
+    model.record_interaction(None)
+    model.record_interaction(None)
+    assert model.get_level(None) == "acquaintance"
+
+    # Should not affect another user
+    assert model.get_level(123) == "stranger"
+
+def test_emotional_engine_user_context():
+    engine = EmotionalEngine()
+
+    # User 1 has positive experience
+    engine.update(0.5, 0.5, 0.5, user_id=1)
+
+    # User 2 has negative experience
+    engine.update(-0.5, -0.5, -0.5, user_id=2)
+
+    # Anonymous user has slightly positive
+    engine.update(0.1, 0.1, 0.1, user_id=None)
+
+    state1, _ = engine.get_state_history(1)
+    state2, _ = engine.get_state_history(2)
+    state_anon, _ = engine.get_state_history(None)
+
+    assert state1.pleasure > 0
+    assert state2.pleasure < 0
+    assert state_anon.pleasure > 0 and state_anon.pleasure < 0.2
+
+def test_emotional_engine_bounded_history() -> None:
+    """Test that the emotional engine bounds the history length correctly when max_history_length is provided."""
+    engine = EmotionalEngine(max_history_length=5)
+
+    # Add 10 updates
+    for i in range(10):
+        engine.update(0.1, 0.05, -0.05)
+
+    # The length of the history should be capped at 5
+    assert len(engine.history) == 5
+
+    # The values in history should reflect the most recent updates
+    # The last update was the 10th one, so the history should have the values
+    # corresponding to the state after the 6th, 7th, 8th, 9th, and 10th updates.
+    # We can check that the history is not empty and is bounded.
+    assert len(engine.history) <= engine.max_history_length
+
+def test_emotional_engine_default_bounded_history() -> None:
+    """Test that the emotional engine defaults to bounding the history length to 100."""
+    engine = EmotionalEngine()
+
+    # Default is 100
+    for i in range(150):
+        engine.update(0.01, 0.01, 0.01)
+
+    assert len(engine.history) == 100

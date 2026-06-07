@@ -4,3 +4,17 @@ huggingface_hub
 transformers>=4.45.0
 torch
 accelerate
+
+# Magda-agent Dependencies
+aiogram==3.15.0
+pydantic<2.10,>=2.4.1
+pydantic-settings==2.7.0
+duckduckgo-search
+openai
+fastapi
+uvicorn
+httpx
+chromadb
+python-dotenv
+croniter
+pytest-asyncio

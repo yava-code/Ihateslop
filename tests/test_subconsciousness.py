@@ -1,0 +1,100 @@
+import pytest
+from unittest.mock import AsyncMock, MagicMock
+from magda_agent.subconsciousness.reflection import Subconsciousness
+from magda_agent.llm_client import LLMClient
+from magda_agent.emotions.engine import EmotionalEngine
+from magda_agent.memory.storage import MemorySystem, MemoryEntry
+from magda_agent.memory.procedural import ProceduralMemory
+
+@pytest.fixture
+def mock_llm_client():
+    mock = AsyncMock(spec=LLMClient)
+    mock.chat_completion.return_value = """
+    ```json
+    {
+        "summary": "I am doing well and growing.",
+        "lessons": ["Mock LLM responses."],
+        "anti_patterns": ["Hardcoding secrets."],
+        "proposed_tasks": ["Add new mock."],
+        "pad_adjustment": {
+            "p": 0.1,
+            "a": -0.05,
+            "d": 0.15
+        }
+    }
+    ```
+    """
+    return mock
+
+@pytest.fixture
+def mock_emotions():
+    mock = MagicMock(spec=EmotionalEngine)
+    mock.state = MagicMock()
+    return mock
+
+@pytest.fixture
+def mock_memory_system():
+    mock = MagicMock(spec=MemorySystem)
+    mock.add_memory = AsyncMock()
+    mock.short_term = [MemoryEntry(content="Test content 1", importance=0.5, emotional_state=MagicMock())]
+    return mock
+
+@pytest.fixture
+def mock_procedural_memory():
+    mock = MagicMock(spec=ProceduralMemory)
+    return mock
+
+@pytest.fixture
+def subconsciousness(mock_llm_client, mock_emotions, mock_memory_system, mock_procedural_memory):
+    return Subconsciousness(
+        llm=mock_llm_client,
+        emotions=mock_emotions,
+        memory=mock_memory_system,
+        procedural_memory=mock_procedural_memory,
+        interval=10
+    )
+
+@pytest.mark.asyncio
+async def test_subconsciousness_instantiation(subconsciousness):
+    assert subconsciousness.interval == 10
+    assert subconsciousness.is_running is False
+    assert hasattr(subconsciousness, "_stop_event")
+
+@pytest.mark.asyncio
+async def test_subconsciousness_reflect(subconsciousness, mock_llm_client, mock_emotions, mock_memory_system, mock_procedural_memory):
+    await subconsciousness.reflect()
+
+    # Verify memory consolidation was called
+    mock_memory_system.consolidate.assert_called_once()
+
+    # Verify LLM was called
+    mock_llm_client.chat_completion.assert_called_once()
+
+    # Verify emotions were updated with PARSED values
+    mock_emotions.update.assert_called_once_with(0.1, -0.05, 0.15)
+
+    # Verify reflection was stored in memory
+    mock_memory_system.add_memory.assert_called_once()
+    call_args = mock_memory_system.add_memory.call_args[1]
+    assert "Subconscious reflection: I am doing well and growing." in call_args["content"]
+    assert call_args["tags"] == ["reflection", "internal"]
+    assert call_args["importance"] == 0.4
+
+    # Verify procedural memory was called
+    assert mock_procedural_memory.store_procedure.call_count == 2
+    mock_procedural_memory.store_procedure.assert_any_call(name="lesson", procedure="Mock LLM responses.")
+    mock_procedural_memory.store_procedure.assert_any_call(name="anti_pattern", procedure="Hardcoding secrets.")
+
+@pytest.mark.asyncio
+async def test_subconsciousness_reflect_no_short_term(subconsciousness, mock_llm_client, mock_memory_system):
+    # Empty short term memory
+    mock_memory_system.short_term = []
+
+    await subconsciousness.reflect()
+
+    # Verify memory consolidation was NOT called
+    mock_memory_system.consolidate.assert_not_called()
+
+    # Verify LLM was NOT called
+    mock_llm_client.chat_completion.assert_not_called()
+
