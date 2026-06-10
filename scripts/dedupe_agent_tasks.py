@@ -73,7 +73,7 @@ REPLENISHMENT_POLICY_UPDATE: dict[str, Any] = {
     "minimum_todo_tasks": 3,
     "batch_size": 3,
     "always_add_tasks": False,
-    "max_todo_tasks": 20,
+    "max_todo_tasks": 60,
     "tasks_per_run": 1,
     "allowed_risks_for_generated_tasks": ["low", "medium"],
     "instruction": (
